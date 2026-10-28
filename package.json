@@ -1,0 +1,19 @@
+{
+  "name": "whatsapp-msg-counter",
+  "version": "1.0.0",
+  "description": "Bot de WhatsApp que conta mensagens enviadas por usuario em um grupo, por dia",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "report": "node src/report.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^7.0.0-rc14",
+    "node-cron": "^4.0.0",
+    "openai": "^7.9.0",
+    "pino": "^9.4.0",
+    "qrcode-terminal": "^0.12.0",
+    "sharp": "^0.35.4"
+  }
+}
