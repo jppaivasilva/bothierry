@@ -210,6 +210,7 @@ A IA só escolhe entre consultas reais nos dados (nunca inventa). Precisa de `OP
 
 - **`!meme <nome>`**: template de meme popular (API do Imgflip, sem legenda).
 - **`!audios`**: lista áudios tocáveis — qualquer arquivo em `audios/` vira comando `!nome-do-arquivo` automaticamente.
+- **`!salvaraudio nome`**: responda a um áudio do grupo com isso pra salvar ele em `audios/` com o nome escolhido; depois qualquer um chama com `!nome`. Não sobrescreve comandos nem áudios existentes.
 - **`!schedule`**: lista mensagens agendadas pendentes (editar `scheduled_messages.json`).
 - **`!policiafederal`**: nota de esclarecimento de zoeira.
 - **`!otario`** (respondendo alguém): marca a pessoa.

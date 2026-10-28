@@ -892,7 +892,10 @@ const COMMAND_CATEGORIES = [
   {
     emoji: '🔊',
     title: 'Áudios',
-    commands: [{ name: 'audios', description: 'lista de áudios disponíveis' }],
+    commands: [
+      { name: 'audios', description: 'lista de áudios disponíveis' },
+      { name: 'salvaraudio', description: 'salva um áudio — responda o áudio com !salvaraudio nome' },
+    ],
   },
   {
     emoji: '📜',
@@ -931,6 +934,7 @@ const commands = {
   testarresultadoeleicao: commandTestarResultadoEleicao,
   otario: commandOtario,
   audios: commandAudios,
+  salvaraudio: commandSalvarAudio,
   regras: commandRegras,
   regulamento: commandRegulamento,
 };
@@ -1469,6 +1473,48 @@ async function commandAudios({ sock, groupJid }) {
   }
   const lines = audios.map((a, i) => `${i + 1}. !${a.name}`);
   return sock.sendMessage(groupJid, { text: `🔊 *Áudios disponíveis*\n\n${lines.join('\n')}` });
+}
+
+// Normaliza o nome escolhido pra um audio salvo: minusculo, sem acento, so
+// letras/numeros/_/-, ate 30 caracteres. Retorna '' se sobrar nada.
+function sanitizeAudioName(raw) {
+  return raw
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, '')
+    .slice(0, 30);
+}
+
+// !salvaraudio <nome> — responda um audio do grupo pra salvar ele em audios/;
+// depois qualquer um chama com !<nome>.
+async function commandSalvarAudio({ sock, groupJid, args, msg }) {
+  const quotedAudio = getQuotedMedia(msg, 'audioMessage');
+  if (!quotedAudio) {
+    return sock.sendMessage(groupJid, { text: 'Responda a um áudio do grupo com !salvaraudio nome pra eu salvar ele.' });
+  }
+
+  const name = sanitizeAudioName(args.split(/\s+/)[0] || '');
+  if (!name) {
+    return sock.sendMessage(groupJid, { text: 'Faltou o nome! Responda o áudio com !salvaraudio nome (só letras, números, _ e -).' });
+  }
+  if (commands[name] || listAudioFiles().some((a) => a.name === name)) {
+    return sock.sendMessage(groupJid, { text: `Já existe um comando ou áudio chamado !${name}, escolhe outro nome.` });
+  }
+
+  try {
+    const mimetype = quotedAudio.message.audioMessage?.mimetype || '';
+    const ext = mimetype.includes('mp4') ? 'm4a' : mimetype.includes('mpeg') ? 'mp3' : mimetype.includes('wav') ? 'wav' : 'ogg';
+
+    const buffer = await downloadMediaMessage(quotedAudio, 'buffer', {});
+    fs.mkdirSync(AUDIOS_DIR, { recursive: true });
+    fs.writeFileSync(path.join(AUDIOS_DIR, `${name}.${ext}`), buffer);
+
+    return sock.sendMessage(groupJid, { text: `✅ Áudio salvo! Agora é só mandar !${name}` });
+  } catch (err) {
+    console.error('Erro ao salvar áudio:', err);
+    return sock.sendMessage(groupJid, { text: 'Não consegui salvar esse áudio, tenta de novo daqui a pouco.' });
+  }
 }
 
 // Envia um audio pelo nome (sem extensao, minusculo) — usado como fallback
