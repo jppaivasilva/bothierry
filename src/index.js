@@ -1450,7 +1450,7 @@ function getAudioMimeType(filename) {
   if (ext === '.mp3') return 'audio/mpeg';
   if (ext === '.m4a') return 'audio/mp4';
   if (ext === '.wav') return 'audio/wav';
-  if (ext === '.ogg') return 'audio/ogg';
+  if (ext === '.ogg') return 'audio/ogg; codecs=opus';
   return 'audio/mpeg';
 }
 
@@ -1528,6 +1528,8 @@ async function sendAudioByName({ sock, groupJid }, name) {
     const sent = await sock.sendMessage(groupJid, {
       audio: fs.readFileSync(path.join(AUDIOS_DIR, audio.filename)),
       mimetype: getAudioMimeType(audio.filename),
+      // .ogg vem de mensagem de voz do WhatsApp (opus) — precisa do ptt pra tocar.
+      ptt: path.extname(audio.filename).toLowerCase() === '.ogg',
     });
     if (sent?.key?.id) sentByBot.add(sent.key.id);
   } catch (err) {
