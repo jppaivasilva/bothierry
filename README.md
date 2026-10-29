@@ -178,7 +178,7 @@ Tudo em `src/` (JavaScript, módulos ES):
 | `groupPhoto.js` | Foto do grupo/bot editada por IA |
 | `avatars.js` | Cache de fotos de perfil dos membros |
 | `displayNames.js` | **Nome padronizado** de cada pessoa (acento, maiúsculas, homônimos) — usado em **todo lugar**: painel, rankings do WhatsApp, `!resumo`, eventos, perguntas sobre dados e aniversários |
-| `weather.js` | Previsão do tempo (Open-Meteo): dados por cidade e texto de reserva |
+| `weather.js` | Previsão do tempo (Open-Meteo): dados por cidade e texto de reserva. Além das cidades fixas, aceita **cidades temporárias** com data de início e fim (`TEMPORARY_CITIES`; ex.: Tietê de 30/10 a 02/11) que saem sozinhas |
 | `weatherCard.js` | Desenha o **cartão de previsão** do bom dia (SVG → PNG com o resvg), estilo do painel |
 | `news.js` | Manchetes do G1 (RSS), usadas pela foto do grupo |
 | `elections.js` | Apuração do TSE (eleição 2026, já concluída) |
