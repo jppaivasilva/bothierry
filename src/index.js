@@ -2168,5 +2168,7 @@ async function startBot() {
   });
 }
 
-startDashboardServer(DASHBOARD_PORT);
+startDashboardServer(DASHBOARD_PORT, {
+  getCommandsMenu: () => ({ categories: COMMAND_CATEGORIES, audios: listAudioFiles().map((a) => a.name) }),
+});
 startBot();
