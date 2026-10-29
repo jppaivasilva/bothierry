@@ -1,5 +1,5 @@
-// Fotos enviadas na mao (tela de admin do painel) pra aniversariantes que nao
-// tem foto de perfil no WhatsApp — por exemplo, quem nao e membro do grupo.
+// Fotos enviadas ANTES pelo nome do aniversariante (funcao que saiu da aba
+// Sistema): continuam valendo na leitura, mas nao ha mais como enviar nova por nome.
 // Ficam so na VM (birthday_photos/, fora do git): foto de gente nao vai pro
 // repositorio publico. Uma foto enviada vale mais que a do WhatsApp.
 import fs from 'fs';
@@ -38,17 +38,6 @@ export function readBirthdayPhoto(name) {
   } catch {
     return null;
   }
-}
-
-/**
- * Salva a foto enviada: confere que e imagem de verdade, corrige a rotacao do
- * celular (EXIF), corta quadrado e reduz — nunca guarda o arquivo original.
- * Lanca erro se nao for uma imagem valida.
- */
-export async function saveBirthdayPhoto(name, buffer) {
-  const jpeg = await toSquareJpeg(buffer);
-  fs.mkdirSync(BIRTHDAY_PHOTOS_DIR, { recursive: true });
-  fs.writeFileSync(birthdayPhotoPath(name), jpeg);
 }
 
 // Confere que e imagem, corrige a rotacao (EXIF), corta quadrado mirando no rosto e reduz.
