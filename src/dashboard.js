@@ -8,6 +8,7 @@ import { getCountsBetween, getGroupJidByName, getMessageTrend, getActivityHeatma
 import { BOT_PHOTO_PATH } from './groupPhoto.js';
 import { formatDisplayName } from './displayNames.js';
 import { getAvatarPath } from './avatars.js';
+import { loadEvents, addAttendee, addAbsentee } from './events.js';
 
 // Usuario/senha do painel (HTTP Basic Auth) — agora que o painel ficou
 // exposto num IP publico (antes era so localhost), precisa de login pra
@@ -64,10 +65,13 @@ function signSession(payload) {
     .digest('hex');
 }
 
-// Cookie: "<validade>.<papel>.<assinatura>", papel = viewer | admin. O papel
-// vai dentro do que e assinado, entao nao da pra trocar viewer por admin na mao.
-function makeSessionCookieValue(role) {
-  const payload = `${Date.now() + SESSION_MAX_AGE_MS}.${role}`;
+// Cookie: "<validade>.<papel>.<identidade>.<assinatura>", papel = viewer |
+// admin | member. "member" e quem entrou pelo link do !painel e leva dentro
+// o jid/nome do WhatsApp (base64url; "-" quando nao tem). Tudo isso entra na
+// assinatura, entao nao da pra trocar de papel nem de pessoa na mao.
+function makeSessionCookieValue(role, identity = null) {
+  const idPart = identity ? Buffer.from(JSON.stringify(identity)).toString('base64url') : '-';
+  const payload = `${Date.now() + SESSION_MAX_AGE_MS}.${role}.${idPart}`;
   return `${payload}.${signSession(payload)}`;
 }
 
@@ -113,26 +117,34 @@ async function serveCachedImage(filePath, contentType, res) {
   }
 }
 
-// Papel da sessao do cookie ('viewer' | 'admin'), ou null se nao tem sessao valida.
-function getSessionRole(req) {
+// Sessao do cookie: { role, jid, name } (jid/name so pra member), ou null se
+// nao tem sessao valida.
+function getSession(req) {
   const value = parseCookies(req)[SESSION_COOKIE_NAME];
   if (!value) return null;
   const parts = value.split('.');
-  if (parts.length !== 3) return null;
-  const [expiryStr, role, sig] = parts;
+  if (parts.length !== 4) return null;
+  const [expiryStr, role, idPart, sig] = parts;
   const expiry = Number(expiryStr);
   if (!expiry || Date.now() > expiry) return null;
-  if (role !== 'viewer' && role !== 'admin') return null;
-  return safeEqual(sig, signSession(`${expiryStr}.${role}`)) ? role : null;
+  if (role !== 'viewer' && role !== 'admin' && role !== 'member') return null;
+  if (!safeEqual(sig, signSession(`${expiryStr}.${role}.${idPart}`))) return null;
+  if (role !== 'member') return { role };
+  try {
+    const identity = JSON.parse(Buffer.from(idPart, 'base64url').toString('utf-8'));
+    return identity?.jid ? { role, jid: identity.jid, name: identity.name || '' } : null;
+  } catch {
+    return null;
+  }
 }
 
 function isAuthorized(req) {
   if (!DASHBOARD_PASS) return true; // sem senha configurada, nao bloqueia (fallback pro comportamento antigo)
-  return getSessionRole(req) !== null;
+  return getSession(req) !== null;
 }
 
 function isAdmin(req) {
-  return getSessionRole(req) === 'admin';
+  return getSession(req)?.role === 'admin';
 }
 
 // Grupo cujo ranking 08h-18h o painel mostra — mesmo grupo usado pela foto
@@ -404,6 +416,12 @@ const DASHBOARD_HTML = `<!doctype html>
   .danger-btn:active, .action-btn:active { transform: scale(0.96); }
   .chip-del { border: none; background: none; color: #d70015; font-size: 14px; font-weight: 700; padding: 0 0 0 6px; cursor: pointer; }
   .log-box { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; line-height: 1.5; color: var(--text-primary); background: rgba(255,255,255,.55); border-radius: 12px; padding: 12px; max-height: 360px; overflow: auto; white-space: pre-wrap; word-break: break-all; margin-top: 12px; }
+  .rsvp-row { display: flex; gap: 8px; margin-top: 14px; }
+  .rsvp-btn { flex: 1; font-family: inherit; font-size: 14px; font-weight: 700; padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(60,60,67,.14); background: rgba(255,255,255,.7); color: var(--text-primary); cursor: pointer; }
+  .rsvp-btn:active { transform: scale(0.97); }
+  .rsvp-btn.on-going { background: #34c759; border-color: #34c759; color: #fff; }
+  .rsvp-btn.on-not { background: #ff3b30; border-color: #ff3b30; color: #fff; }
+  .people-list { font-size: 13px; color: var(--text-primary); margin-top: 6px; }
   .menu-chips { display: flex; flex-wrap: wrap; gap: 6px; }
   .member-search { width: 100%; max-width: 320px; font-size: 14px; font-family: inherit; padding: 10px 14px; border-radius: 12px; border: 1px solid rgba(60,60,67,.14); background: rgba(255,255,255,.7); color: var(--text-primary); outline: none; margin-bottom: 20px; transition: border-color .15s var(--ease-out), box-shadow .15s var(--ease-out); }
   .member-search:focus { border-color: var(--accent-blue); box-shadow: 0 0 0 4px rgba(0,122,255,.14); }
@@ -483,6 +501,7 @@ const DASHBOARD_HTML = `<!doctype html>
       <button class="tab-btn" data-tab="activity">Atividade</button>
       <button class="tab-btn" data-tab="members">Membros</button>
       <button class="tab-btn" data-tab="menu">Comandos</button>
+      <button class="tab-btn" data-tab="events">Eventos</button>
       <button class="tab-btn" data-tab="system">Sistema</button>
       <button class="tab-btn" data-tab="server">Servidor</button>
     </div>
@@ -581,6 +600,11 @@ const DASHBOARD_HTML = `<!doctype html>
   <div class="sub">Todos os comandos do bot · mande no grupo começando com ! (ou /)</div>
   <input type="text" id="menuSearch" class="member-search" placeholder="Buscar comando..." />
   <div id="menuGrid" class="menu-grid"></div>
+  </div>
+
+  <div id="tab-events" class="tab-panel">
+  <div class="sub" id="eventsSub">Próximos eventos do grupo</div>
+  <div id="eventsGrid" class="menu-grid"></div>
   </div>
 
   <div id="tab-system" class="tab-panel">
@@ -699,6 +723,7 @@ document.querySelectorAll('.tabs:not(#rankingToggle) > .tab-btn').forEach((btn) 
     if (btn.dataset.tab === 'server' && systemHistoryChart) systemHistoryChart.resize();
     if (btn.dataset.tab === 'members') loadMembers();
     if (btn.dataset.tab === 'menu') loadMenu();
+    if (btn.dataset.tab === 'events') loadEvents();
   });
 });
 let chart;
@@ -1240,6 +1265,8 @@ function closeMemberModal() {
 // (o servidor tambem barra essas rotas pra quem nao e admin).
 fetch('/api/me').then((r) => r.json()).then((me) => {
   if (me.role === 'admin') document.body.classList.add('is-admin');
+  // Quem entrou pelo link do !painel veio pra marcar presenca: ja abre em Eventos.
+  if (me.role === 'member') document.querySelector('button[data-tab=events]').click();
 }).catch(() => {});
 
 let menuData = null;
@@ -1348,6 +1375,63 @@ document.getElementById('restartBtn').addEventListener('click', async () => {
     setTimeout(() => location.reload(), 15000);
   } catch {
     msg.textContent = 'Não consegui falar com o bot.';
+  }
+});
+
+let eventsMe = null;
+
+function fmtEventDate(d) {
+  const p = d.split('-');
+  return p[2] + '/' + p[1] + '/' + p[0];
+}
+
+async function loadEvents() {
+  const res = await fetch('/api/events');
+  const data = await res.json();
+  eventsMe = data.me;
+  document.getElementById('eventsSub').textContent = data.me
+    ? 'Olá, ' + data.me.name + '! Marque se você vai ou não em cada evento.'
+    : 'Próximos eventos do grupo · pra marcar presença, mande !painel no grupo e abra o link que o bot te enviar no privado.';
+  const grid = document.getElementById('eventsGrid');
+  if (data.events.length === 0) {
+    grid.innerHTML = '<div class="member-empty">Nenhum evento futuro cadastrado.</div>';
+    return;
+  }
+  grid.innerHTML = data.events.map((e, i) => {
+    const extras = Object.keys(e.extra).map((k) => '<div class="menu-desc">' + escapeHtml(k) + ': ' + escapeHtml(e.extra[k]) + '</div>').join('');
+    const names = (list) => list.length ? list.map(escapeHtml).join(', ') : '—';
+    const buttons = data.me
+      ? '<div class="rsvp-row">' +
+        '<button class="rsvp-btn' + (e.myStatus === 'going' ? ' on-going' : '') + '" data-idx="' + i + '" data-status="going">✅ Vou</button>' +
+        '<button class="rsvp-btn' + (e.myStatus === 'not' ? ' on-not' : '') + '" data-idx="' + i + '" data-status="not">❌ Não vou</button>' +
+        '</div>'
+      : '';
+    return '<div class="card"><div class="menu-title">📅 ' + escapeHtml(e.title) + '</div>' +
+      '<div class="menu-desc">' + fmtEventDate(e.date) + ' · ' + escapeHtml(e.time || '') + '</div>' +
+      '<div class="menu-desc">📍 ' + escapeHtml(e.location || '') + '</div>' + extras +
+      '<div class="modal-section-label" style="margin-top:14px;">Confirmados (' + e.attendees.length + ')</div>' +
+      '<div class="people-list">' + names(e.attendees) + '</div>' +
+      '<div class="modal-section-label" style="margin-top:10px;">Ausentes (' + e.absentees.length + ')</div>' +
+      '<div class="people-list">' + names(e.absentees) + '</div>' + buttons + '</div>';
+  }).join('');
+  grid.dataset.titles = JSON.stringify(data.events.map((e) => e.title));
+}
+
+document.getElementById('eventsGrid').addEventListener('click', async (e) => {
+  const btn = e.target.closest('.rsvp-btn');
+  if (!btn) return;
+  const titles = JSON.parse(document.getElementById('eventsGrid').dataset.titles || '[]');
+  try {
+    const res = await fetch('/api/events/rsvp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'panel' },
+      body: JSON.stringify({ title: titles[Number(btn.dataset.idx)], status: btn.dataset.status }),
+    });
+    const data = await res.json();
+    if (!data.ok) { alert('Não deu: ' + (data.error || 'erro')); return; }
+    await loadEvents();
+  } catch {
+    alert('Não consegui falar com o bot. Tenta de novo.');
   }
 });
 
@@ -1571,6 +1655,58 @@ function renderLoginPage(hasError) {
 </html>`;
 }
 
+// Links de acesso gerados pelo !painel: uso unico, valem 5 minutos e ficam so
+// em memoria (reiniciar o bot invalida todos, o que e o desejado).
+const LOGIN_TOKEN_TTL_MS = 5 * 60 * 1000;
+const LOGIN_TOKEN_COOLDOWN_MS = 20 * 1000;
+const loginTokens = new Map(); // token -> { jid, name, expires }
+const lastTokenByJid = new Map(); // jid -> timestamp
+
+// Escape de HTML no servidor (a pagina /entrar mostra o nome vindo do WhatsApp).
+function escapeHtmlServer(str) {
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function pruneLoginTokens() {
+  const now = Date.now();
+  for (const [token, entry] of loginTokens) if (entry.expires < now) loginTokens.delete(token);
+  for (const [jid, ts] of lastTokenByJid) if (now - ts > LOGIN_TOKEN_COOLDOWN_MS) lastTokenByJid.delete(jid);
+}
+
+// Chamado pelo !painel. Retorna { token } ou { wait: segundos } se a pessoa
+// pediu outro link cedo demais. Pedir um novo invalida o anterior da pessoa.
+export function createLoginToken({ jid, name }) {
+  pruneLoginTokens();
+  const last = lastTokenByJid.get(jid);
+  if (last && Date.now() - last < LOGIN_TOKEN_COOLDOWN_MS) {
+    return { wait: Math.ceil((LOGIN_TOKEN_COOLDOWN_MS - (Date.now() - last)) / 1000) };
+  }
+  for (const [token, entry] of loginTokens) if (entry.jid === jid) loginTokens.delete(token);
+  const token = crypto.randomBytes(24).toString('base64url');
+  loginTokens.set(token, { jid, name, expires: Date.now() + LOGIN_TOKEN_TTL_MS });
+  lastTokenByJid.set(jid, Date.now());
+  return { token };
+}
+
+function peekLoginToken(token) {
+  pruneLoginTokens();
+  return typeof token === 'string' ? loginTokens.get(token) || null : null;
+}
+
+// Pagina simples (mesmo visual do login) usada pelo /entrar. O link do WhatsApp
+// abre uma pagina com um botao — o token so e gasto no clique (POST), pra
+// previa de link ou robo que apenas abra a URL nao queimar o acesso da pessoa.
+function renderEntrarPage({ title, message, token }) {
+  const form = token
+    ? '<form method="POST" action="/entrar"><input type="hidden" name="t" value="' + token + '" /><button type="submit" class="submit-btn">Entrar no painel</button></form>'
+    : '';
+  const card =
+    '<div class="login-card"><img src="/bot-photo.png" alt="Bothierry" class="login-logo" onerror="this.style.display=\'none\'" />' +
+    '<div class="login-title">' + title + '</div><div class="login-sub">' + message + '</div>' + form +
+    '<div class="login-footer">Acesso por link · Bothierry</div></div>';
+  return renderLoginPage(false).replace(/<div class="login-card">[\s\S]*<\/div>\s*<\/body>/, () => card + '\n</body>');
+}
+
 // Acoes de administracao do painel (apagar audio, reiniciar, ver logs) — so
 // aceitas via POST/GET com o cabecalho X-Requested-With (o fetch do proprio
 // painel manda; um formulario/imagem de outro site nao consegue), alem do
@@ -1674,6 +1810,48 @@ export function startDashboardServer(
       return;
     }
 
+    if (urlObj.pathname === '/entrar' && req.method === 'GET') {
+      const entry = peekLoginToken(urlObj.searchParams.get('t'));
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(
+        entry
+          ? renderEntrarPage({ title: 'Olá, ' + escapeHtmlServer(entry.name ? formatDisplayName(entry.name) : 'amigo') + '!', message: 'Toque no botão pra entrar no painel e marcar presença nos eventos.', token: urlObj.searchParams.get('t') })
+          : renderEntrarPage({ title: 'Link expirado', message: 'Esse link já foi usado ou venceu. Mande !painel no grupo pra receber outro.' }),
+      );
+      return;
+    }
+
+    if (urlObj.pathname === '/entrar' && req.method === 'POST') {
+      if (isRateLimited(ip)) {
+        res.writeHead(429, { 'Content-Type': 'text/plain', 'Retry-After': '300' });
+        res.end('Muitas tentativas — tente novamente em alguns minutos.');
+        return;
+      }
+      let body = '';
+      req.on('data', (chunk) => {
+        body += chunk;
+        if (body.length > 10_000) req.destroy();
+      });
+      req.on('end', () => {
+        const token = new URLSearchParams(body).get('t') || '';
+        const entry = peekLoginToken(token);
+        if (!entry) {
+          recordFailedLogin(ip);
+          res.writeHead(302, { Location: '/entrar?t=' });
+          res.end();
+          return;
+        }
+        loginTokens.delete(token); // uso unico
+        console.log(`[painel] ${entry.name || entry.jid} entrou pelo link do !painel`);
+        res.writeHead(302, {
+          'Set-Cookie': `${SESSION_COOKIE_NAME}=${makeSessionCookieValue('member', { jid: entry.jid, name: entry.name })}; HttpOnly; Path=/; Max-Age=${Math.floor(SESSION_MAX_AGE_MS / 1000)}; SameSite=Lax`,
+          Location: '/',
+        });
+        res.end();
+      });
+      return;
+    }
+
     if (urlObj.pathname === '/logout') {
       res.writeHead(302, { 'Set-Cookie': `${SESSION_COOKIE_NAME}=; HttpOnly; Path=/; Max-Age=0`, Location: '/login' });
       res.end();
@@ -1724,7 +1902,43 @@ export function startDashboardServer(
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(trend));
     } else if (req.url === '/api/me') {
-      sendJson(res, 200, { role: isAdmin(req) ? 'admin' : 'viewer' });
+      const session = getSession(req);
+      sendJson(res, 200, { role: session?.role || 'viewer', name: session?.role === 'member' ? session.name : null });
+    } else if (req.url === '/api/events') {
+      const session = getSession(req);
+      const me = session?.role === 'member' ? session : null;
+      const today = getBrasiliaToday();
+      const events = loadEvents()
+        .filter((e) => e.date >= today)
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .map((e) => ({
+          title: e.title,
+          date: e.date,
+          time: e.time,
+          location: e.location,
+          extra: e.extra || {},
+          attendees: (e.attendees || []).map((a) => formatDisplayName(a.name)),
+          absentees: (e.absentees || []).map((a) => formatDisplayName(a.name)),
+          myStatus: me
+            ? (e.attendees || []).some((a) => a.jid === me.jid) ? 'going'
+              : (e.absentees || []).some((a) => a.jid === me.jid) ? 'not' : null
+            : null,
+        }));
+      sendJson(res, 200, { me: me ? { name: formatDisplayName(me.name) } : null, events });
+    } else if (req.url === '/api/events/rsvp' && req.method === 'POST') {
+      const session = getSession(req);
+      if (session?.role !== 'member') return sendJson(res, 403, { ok: false, error: 'entre pelo link do !painel pra marcar presença' });
+      if (!isPanelRequest(req)) return sendJson(res, 403, { ok: false, error: 'requisição inválida' });
+      readJsonBody(req, (err, data) => {
+        if (err || typeof data.title !== 'string' || (data.status !== 'going' && data.status !== 'not')) {
+          return sendJson(res, 400, { ok: false, error: 'pedido inválido' });
+        }
+        const person = { jid: session.jid, name: session.name };
+        const updated = (data.status === 'going' ? addAttendee : addAbsentee)(data.title, person);
+        if (!updated) return sendJson(res, 404, { ok: false, error: 'evento não encontrado' });
+        console.log(`[painel] ${person.name} marcou ${data.status === 'going' ? 'presença' : 'ausência'} em "${data.title}"`);
+        sendJson(res, 200, { ok: true });
+      });
     } else if (req.url === '/api/audios/delete' && req.method === 'POST') {
       if (!isAdmin(req)) return sendJson(res, 403, { ok: false, error: 'só o administrador pode fazer isso' });
       if (!isPanelRequest(req)) return sendJson(res, 403, { ok: false, error: 'requisição inválida' });

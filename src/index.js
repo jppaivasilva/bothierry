@@ -36,7 +36,7 @@ import { loadScheduledMessages, getDueMessages, markScheduledMessageSent } from 
 import { loadRules, findMatchingRule } from './rules.js';
 import { answerDataQuestion } from './dataQuestions.js';
 import { recordConnectionEvent, recordMessage, recordCommandUsage, recordCronRun, recordError, pruneOldMetrics, recordSystemStats } from './metrics.js';
-import { startDashboardServer } from './dashboard.js';
+import { startDashboardServer, createLoginToken } from './dashboard.js';
 import { getWeatherBlock } from './weather.js';
 import { getPresidentSummary, getUrnasApuradasPorRegiao } from './elections.js';
 
@@ -838,6 +838,31 @@ async function commandNaoVou(ctx) {
   });
 }
 
+// !painel — manda no PRIVADO de quem pediu um link de uso unico (vale 5 min)
+// que entra no painel ja identificado pelo WhatsApp, pra marcar presenca nos
+// eventos sem senha nem cadastro de telefone.
+async function commandPainel({ sock, groupJid, senderJid, senderName }) {
+  const result = createLoginToken({ jid: senderJid, name: senderName });
+  if (result.wait) {
+    return sock.sendMessage(groupJid, { text: `Calma, já te mandei um link. Tenta de novo em ${result.wait}s.` });
+  }
+  try {
+    const sent = await sock.sendMessage(senderJid, {
+      text: `🔑 Seu link pro painel (vale 5 minutos e só funciona uma vez):\n${DASHBOARD_URL}/entrar?t=${result.token}\n\nLá na aba *Eventos* você marca se vai ou não nos eventos.`,
+    });
+    if (sent?.key?.id) sentByBot.add(sent.key.id);
+    return sock.sendMessage(groupJid, {
+      text: `@${senderJid.split('@')[0]} te mandei o link no privado 📩`,
+      mentions: [senderJid],
+    });
+  } catch (err) {
+    console.error('Erro ao mandar link do painel no privado:', err);
+    return sock.sendMessage(groupJid, {
+      text: 'Não consegui te chamar no privado. Manda um "oi" pra mim no privado e tenta o !painel de novo.',
+    });
+  }
+}
+
 async function commandAniversariantes({ sock, groupJid }) {
   const all = loadBirthdays();
   if (all.length === 0) {
@@ -875,6 +900,7 @@ const COMMAND_CATEGORIES = [
     emoji: '🗞️',
     title: 'Outros',
     commands: [
+      { name: 'painel', description: 'te manda no privado um link pro painel, pra marcar presença nos eventos' },
       { name: 'news', description: 'manchete mais recente do G1' },
       { name: 'resumo', description: 'resume as mensagens das últimas 24h, em até 10 tópicos (via IA)' },
       { name: 'transcrever', description: 'transcreve um áudio — responda o áudio com !transcrever' },
@@ -918,6 +944,7 @@ const commands = {
   vou: commandVou,
   naovou: commandNaoVou,
   menu: commandMenu,
+  painel: commandPainel,
   news: commandNews,
   resumo: commandResumo,
   transcrever: commandTranscrever,
