@@ -8,6 +8,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { getMemberList, getMainGroupJid } from './db.js';
 import { normalizeName, removeLinksToJid } from './birthdayLinks.js';
+import { formatDisplayName } from './displayNames.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FILE = path.join(__dirname, '..', 'extra_members.json');
@@ -51,13 +52,25 @@ export function removeExtraMember(jid) {
   return true;
 }
 
+// O proprio bot nao e membro: as mensagens que ele manda ficam registradas com o
+// nome dele ("Bothierry"), mas ele nao entra na lista de membros. Reconhece pelo
+// numero (informado pelo index.js quando conecta) e pelo nome de exibicao.
+let botJids = [];
+export function setBotJids(jids) {
+  botJids = (jids || []).filter(Boolean);
+}
+
+export function isBot(member) {
+  return botJids.includes(member.jid) || normalizeName(formatDisplayName(member.name)) === 'bothierry';
+}
+
 /**
  * Membros do grupo principal (quem ja mandou mensagem) + as pessoas
  * adicionadas na mao. E a lista que o painel e os aniversarios usam.
  */
 export function getMembersWithExtras() {
   const groupJid = getMainGroupJid();
-  const real = groupJid ? getMemberList(groupJid) : [];
+  const real = (groupJid ? getMemberList(groupJid) : []).filter((m) => !isBot(m));
   const extras = loadExtraMembers().map((e) => ({ jid: e.jid, name: e.name, total: 0, todayCount: 0, since: null, manual: true }));
   return [...real, ...extras];
 }

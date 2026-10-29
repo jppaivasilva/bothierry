@@ -43,7 +43,7 @@ import { renderBirthdayCard, photoToDataUri } from './birthdayCard.js';
 import { formatDisplayName } from './displayNames.js';
 import { resolveBirthdayMember, birthdayDisplayName, normalizeName } from './birthdayLinks.js';
 import { readBirthdayPhoto, readMemberPhoto } from './birthdayPhotos.js';
-import { getMembersWithExtras } from './extraMembers.js';
+import { getMembersWithExtras, setBotJids } from './extraMembers.js';
 import { getPresidentSummary, getUrnasApuradasPorRegiao } from './elections.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -2145,6 +2145,7 @@ async function startBot() {
       console.log('✅ Conectado ao WhatsApp! Ouvindo mensagens dos grupos...');
       recordConnectionEvent('connected');
       currentSock = sock;
+      setBotJids([normalizeJid(sock.user?.id), normalizeJid(sock.user?.lid), ...[sock.user?.id, sock.user?.lid].filter(Boolean).map(jidNormalizedUser)]);
       // Se o bot esteve desligado no horario do aviso diario, verifica agora
       // (so nesse "catch-up" pra nao mandar aniversario de madrugada).
       if (new Date().getHours() >= BIRTHDAY_CHECK_HOUR) {
