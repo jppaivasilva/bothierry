@@ -43,6 +43,7 @@ import { renderBirthdayCard, photoToDataUri } from './birthdayCard.js';
 import { formatDisplayName } from './displayNames.js';
 import { resolveBirthdayMember, birthdayDisplayName, normalizeName } from './birthdayLinks.js';
 import { readBirthdayPhoto, readMemberPhoto } from './birthdayPhotos.js';
+import { getMembersWithExtras } from './extraMembers.js';
 import { getPresidentSummary, getUrnasApuradasPorRegiao } from './elections.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -873,8 +874,7 @@ async function commandPainel({ sock, groupJid, senderJid, senderName }) {
 
 // Membros do grupo principal (pra achar o nome de exibicao de cada aniversariante).
 function getBirthdayMembers() {
-  const groupJid = getMainGroupJid();
-  return groupJid ? getMemberList(groupJid) : [];
+  return getMembersWithExtras();
 }
 
 async function commandAniversariantes({ sock, groupJid }) {

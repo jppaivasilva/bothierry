@@ -169,7 +169,8 @@ Tudo em `src/` (JavaScript, módulos ES):
 | `events.js` | Eventos e presença (`events.json`) |
 | `birthdays.js` | Aniversariantes e controle de renomear o grupo |
 | `birthdayCard.js` | Desenha o **cartão de aniversário** (estilo "festa escura", foto + confete) em SVG → PNG |
-| `birthdayPhotos.js` | Fotos enviadas na mão pelo painel (admin) pra aniversariantes sem foto no WhatsApp, ex.: quem não é membro do grupo — ficam só na VM |
+| `birthdayPhotos.js` | Fotos enviadas na mão pelo painel (admin): por **membro** (tocar na foto na aba Membros) e as antigas por nome de aniversariante (só leitura) — ficam só na VM |
+| `extraMembers.js` | Pessoas **adicionadas na mão** à lista de membros (quem faz aniversário mas não está no grupo, ex.: Vini) + a lista completa de membros usada pelo painel e pelos aniversários |
 | `birthdayLinks.js` | De/para aniversariante → membro do grupo (foto do cartão e da lista): ligação manual do painel, ou automática por nome/apelido (`apelidos.txt`) quando só uma pessoa bate; sugere candidatos nos demais |
 | `scheduled.js` | Mensagens agendadas pontuais (`scheduled_messages.json`) |
 | `rules.js` | Regras do grupo (`regras/*.txt`) |
@@ -206,7 +207,9 @@ Tudo em arquivos na pasta do projeto, **na VM** (a maioria está no `.gitignore`
 | `birthdays.json`, `apelidos.txt` | aniversariantes e apelidos | não |
 | `birthday_links.json` | ligações aniversariante → membro feitas no painel (admin) | não |
 | `member_photos/` | fotos de membros enviadas pelo painel (admin, tocando na foto na aba Membros) — foto de pessoa não vai pro git | não |
-| `birthday_photos/` | fotos de aniversariantes que **não** são membros (ex.: Vini), enviadas na tela de admin | não |
+| `member_photos/` | fotos de membros enviadas pelo painel (admin, tocando na foto na aba Membros) — foto de pessoa não vai pro git | não |
+| `birthday_photos/` | fotos antigas enviadas pelo **nome** do aniversariante (função removida; continuam valendo, e saem junto ao remover a foto do membro ligado) | não |
+| `extra_members.json` | pessoas adicionadas na mão à lista de membros (admin) | não |
 | `scheduled_messages.json` | mensagens agendadas pontuais | não |
 | `audios/` | áudios tocáveis (`!nome`), `repetido.mp3` do aviso de link repetido | não |
 | `regras/`, `regulamento.txt`, `megasena.txt` | regras e textos fixos | não |
@@ -293,13 +296,13 @@ A sessão é um cookie assinado com HMAC (30 dias), com o papel dentro da assina
 
 - **Visão geral** — mensagens por hora do dia (com 👑 de quem mais falou em cada hora) e **ranking** (Expediente 08h–18h ou dia completo, com seletor de data).
 - **Atividade** — tendência por pessoa (7/14/30 dias) e mapa de calor (dia da semana × hora).
-- **Membros** — todos do grupo, **ordenados pelo ranking de hoje** (quem não falou fica por último), com busca; clicar abre os detalhes da pessoa (pódio, horário preferido, últimos 14 dias). **Admin:** tocar na **foto** (ou no círculo com a inicial) abre o menu **Enviar/Trocar foto** e **Remover foto enviada** (volta pra do WhatsApp). A foto enviada vale em todo o painel (ranking, campeões da hora, detalhes) e no cartão de aniversário.
+- **Membros** — todos do grupo, **ordenados pelo ranking de hoje** (quem não falou fica por último), com busca; clicar abre os detalhes da pessoa (pódio, horário preferido, últimos 14 dias). **Admin:** tocar na **foto** (ou no círculo com a inicial) abre o menu **Enviar/Trocar foto** e **Remover foto enviada** (volta pra do WhatsApp); o botão **➕ Adicionar pessoa** inclui na lista quem não está no grupo (ex.: Vini, Felipe Lopes) — ela ganha foto editável, entra na ligação dos aniversários e pode ser removida pelo mesmo menu. A foto enviada vale em todo o painel (ranking, campeões da hora, detalhes) e no cartão de aniversário.
 - **Comandos** — menu de todos os comandos, aniversariantes cadastrados e áudios salvos (o admin vê o ✕ pra apagar).
 - **Eventos** — próximos eventos com confirmados/ausentes, um nome por linha, e botões Vou / Não vou (para *member*). Quem entra pelo link do `!painel` já abre nesta aba.
-- **Sistema** — status, uptime, quedas, memória, eventos de conexão, erros, comandos mais usados, crons; o admin vê também **Ações** (reiniciar o bot e ver logs) e **Aniversariantes e fotos** (escolhe qual membro é cada aniversariante, ou **envia uma foto** da galeria pra quem não está no grupo — as fotos de **membros** se trocam direto na aba **Membros** (veja abaixo), e aqui só ficam os botões de foto de quem não é membro; "automático" liga sozinho só quando o nome — ou o apelido de `apelidos.txt` — bate com **uma** pessoa só: nome igual, ou um nome contendo o outro, como "Lucas" → Lucas Souza; senão fica "sem foto", e o painel **sugere** candidatos pra ligar com um toque).
+- **Sistema** — status, uptime, quedas, memória, eventos de conexão, erros, comandos mais usados, crons; o admin vê também **Ações** (reiniciar o bot e ver logs) e **Aniversariantes** (escolhe qual membro é cada aniversariante — o nome e a foto do membro saem no cartão e na lista; "automático" liga sozinho só quando o nome, ou o apelido de `apelidos.txt`, bate com **uma** pessoa só: nome igual, ou um nome contendo o outro, como "Lucas" → Lucas Souza; senão fica "sem ligação" e o painel **sugere** candidatos pra ligar com um toque).
 - **Servidor** — CPU, memória e disco da VM, com histórico.
 
-**Rotas da API** (todas atrás do login): `/api/metrics`, `/api/messages-per-hour`, `/api/ranking`, `/api/ranking-full`, `/api/trend`, `/api/heatmap`, `/api/members`, `/api/member`, `/api/commands`, `/api/events`, `/api/events/rsvp` (member), `/api/me`, `/api/system`, `/api/system-history`; **admin**: `/api/audios/delete`, `/api/restart`, `/api/logs`, `/api/admin/birthday-links`, `/api/admin/member-photo` e `/api/admin/birthday-photo` (envio/remoção de foto, até 15 MB — o servidor corrige a rotação, corta e reduz). Qualquer logado vê as fotos em `/birthday-photo`. Mais `/login`, `/logout`, `/entrar` (link do `!painel`), `/avatar` e `/bot-photo.png`.
+**Rotas da API** (todas atrás do login): `/api/metrics`, `/api/messages-per-hour`, `/api/ranking`, `/api/ranking-full`, `/api/trend`, `/api/heatmap`, `/api/members`, `/api/member`, `/api/commands`, `/api/events`, `/api/events/rsvp` (member), `/api/me`, `/api/system`, `/api/system-history`; **admin**: `/api/audios/delete`, `/api/restart`, `/api/logs`, `/api/admin/birthday-links`, `/api/admin/member-photo` (envio/remoção de foto de membro, até 15 MB — o servidor corrige a rotação, corta e reduz), `/api/admin/extra-members` (adicionar/remover pessoa manual). Qualquer logado vê as fotos em `/birthday-photo`. Mais `/login`, `/logout`, `/entrar` (link do `!painel`), `/avatar` e `/bot-photo.png`.
 
 **Fotos de perfil:** o bot busca a foto de cada pessoa no WhatsApp e guarda em `avatars/`. Se a privacidade da pessoa bloqueia (`not-authorized`), o painel mostra as iniciais. Pra associar uma foto na mão: `node scripts/set-avatar.js "Nome Da Pessoa" caminho/foto.jpg`.
 

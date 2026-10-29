@@ -45,6 +45,19 @@ export function setBirthdayLink(name, jid) {
   fs.writeFileSync(LINKS_FILE, JSON.stringify(links, null, 2) + '\n');
 }
 
+/** Remove todas as ligacoes manuais que apontam pra esse jid (ex.: pessoa manual removida). */
+export function removeLinksToJid(jid) {
+  const links = loadBirthdayLinks();
+  let changed = false;
+  for (const [key, value] of Object.entries(links)) {
+    if (value === jid) {
+      delete links[key];
+      changed = true;
+    }
+  }
+  if (changed) fs.writeFileSync(LINKS_FILE, JSON.stringify(links, null, 2) + '\n');
+}
+
 // apelidos.txt: "Nome Completo;apelido1;apelido2" -> { apelido normalizado: nome completo }
 function loadAliasMap() {
   const map = {};
