@@ -1517,6 +1517,23 @@ async function commandSalvarAudio({ sock, groupJid, args, msg }) {
   }
 }
 
+// Apaga um audio salvo (usado pelo painel). Valida o nome pra nunca sair da
+// pasta audios/, e protege o repetido.mp3 (tocado no aviso de link repetido).
+function deleteAudioByName(rawName) {
+  const name = String(rawName).toLowerCase();
+  if (!/^[a-z0-9_-]+$/.test(name)) return { ok: false, error: 'nome inválido' };
+  if (name === 'repetido') return { ok: false, error: 'esse áudio é do aviso de link repetido e não pode ser apagado' };
+  const audio = listAudioFiles().find((a) => a.name === name);
+  if (!audio) return { ok: false, error: 'áudio não encontrado' };
+  try {
+    fs.unlinkSync(path.join(AUDIOS_DIR, audio.filename));
+    return { ok: true };
+  } catch (err) {
+    console.error(`Erro ao apagar audio ${name}:`, err);
+    return { ok: false, error: 'não consegui apagar o arquivo' };
+  }
+}
+
 // Envia um audio pelo nome (sem extensao, minusculo) — usado como fallback
 // quando um comando digitado nao bate com nenhum dos fixos, mas bate com um
 // arquivo em audios/.
@@ -2169,6 +2186,7 @@ async function startBot() {
 }
 
 startDashboardServer(DASHBOARD_PORT, {
+  deleteAudio: deleteAudioByName,
   getCommandsMenu: () => ({
     categories: COMMAND_CATEGORIES,
     audios: listAudioFiles().map((a) => a.name),
