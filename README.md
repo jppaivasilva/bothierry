@@ -174,12 +174,13 @@ Tudo em `src/` (JavaScript, módulos ES):
 | `groupPhoto.js` | Foto do grupo/bot editada por IA |
 | `avatars.js` | Cache de fotos de perfil dos membros |
 | `displayNames.js` | Padroniza nomes na exibição (acento, maiúsculas, homônimos) |
-| `weather.js` | Previsão do tempo (Open-Meteo) |
+| `weather.js` | Previsão do tempo (Open-Meteo): dados por cidade e texto de reserva |
+| `weatherCard.js` | Desenha o **cartão de previsão** do bom dia (SVG → PNG com o resvg), estilo do painel |
 | `news.js` | Manchetes do G1 (RSS) |
 | `elections.js` | Apuração do TSE (eleição 2026, já concluída) |
 | `report.js` | Relatório pelo terminal (`npm run report`) |
 
-Fora de `src/`: `deploy.sh` (deploy automático), `ecosystem.config.cjs` (PM2), `scripts/set-avatar.js` (associa foto a alguém na mão), `assets/` (foto-base do bot, imagens fixas, banner da propaganda).
+Fora de `src/`: `deploy.sh` (deploy automático), `ecosystem.config.cjs` (PM2), `scripts/set-avatar.js` (associa foto a alguém na mão), `assets/` (foto-base do bot, imagens fixas, banner da propaganda, `fonts/` com a fonte Inter do cartão de previsão).
 
 **Grupo principal:** o código **não depende do nome do grupo** (que muda com frequência). O bot usa o único grupo em que está — ou, havendo vários, o mais ativo nos últimos 7 dias; o painel usa o grupo com mais mensagens na última semana (`getMainGroupJid()` em `db.js`).
 
@@ -220,7 +221,7 @@ Todas dentro do processo do bot (`node-cron`, fuso `America/Sao_Paulo`, tolerân
 | 00:01 | sincroniza o nome do grupo (reverte renomeações do dia anterior) |
 | 03:00 | arquiva mensagens antigas e poda métricas |
 | 03:30 | troca a foto do bot se o tema mudou; sincroniza fotos de perfil |
-| 08:00 (seg–sex) | bom dia + feriado nacional + previsão do tempo |
+| 08:00 (seg–sex) | bom dia + feriado nacional + **cartão de previsão do tempo** (imagem; se falhar, vai em texto) |
 | 08:00 (seg e qua) | atualiza a foto do grupo com a notícia do dia (via IA) |
 | 09:00 | aviso de aniversariantes + renomeia o grupo |
 | 18:00 (seg–sex) | ranking do expediente (08h–18h) |
@@ -240,7 +241,7 @@ Além disso, ao conectar o bot checa aniversário, nome do grupo, tema da foto e
 | **OpenAI** — `whisper-1` | `!transcrever` | `OPENAI_API_KEY` |
 | **OpenAI** — `gpt-image-1` | edição da foto do grupo/bot (o item mais caro do bot) | `OPENAI_API_KEY` |
 | **G1** (RSS) | `!news` e notícia da foto do grupo | não |
-| **Open-Meteo** | previsão do tempo do bom dia | não |
+| **Open-Meteo** | previsão do tempo do bom dia (vira o cartão em imagem) | não |
 | **BrasilAPI** | feriados nacionais | não |
 | **Imgflip** | `!meme` (templates populares) | não |
 | **TSE** | apuração das eleições | não |
@@ -318,6 +319,7 @@ Use `!` ou `/` no começo. `!menu` lista tudo no próprio WhatsApp (e a aba **Co
 | `!regras` · `!regulamento` · `!megasena` | textos fixos |
 | `!policiafederal` · `!otario` | zoeiras |
 | `!testarpropaganda` *(oculto)* | manda a propaganda só no grupo onde for digitado |
+| `!testarbomdia` *(oculto)* | manda o bom dia (com o cartão de previsão) só no grupo onde for digitado |
 
 **Perguntar dados do grupo:** mencione **@Bothierry** com uma pergunta ("quantas vezes o Fulano ficou no top 3?"). A IA só escolhe entre consultas reais nos dados, nunca inventa. Apelidos em `apelidos.txt` (`Nome Completo;apelido1;apelido2`).
 

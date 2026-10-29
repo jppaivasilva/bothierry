@@ -9,6 +9,7 @@
     "report": "node src/report.js"
   },
   "dependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "@whiskeysockets/baileys": "^7.0.0-rc14",
     "node-cron": "^4.0.0",
     "openai": "^7.9.0",

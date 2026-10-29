@@ -37,7 +37,8 @@ import { loadRules, findMatchingRule } from './rules.js';
 import { answerDataQuestion } from './dataQuestions.js';
 import { recordConnectionEvent, recordMessage, recordCommandUsage, recordCronRun, recordError, pruneOldMetrics, recordSystemStats } from './metrics.js';
 import { startDashboardServer, createLoginToken } from './dashboard.js';
-import { getWeatherBlock } from './weather.js';
+import { getWeatherData, formatWeatherBlock } from './weather.js';
+import { renderWeatherCard } from './weatherCard.js';
 import { getPresidentSummary, getUrnasApuradasPorRegiao } from './elections.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -961,6 +962,7 @@ const commands = {
   policiafederal: commandPoliciaFederal,
   testareleicao: commandTestarEleicao,
   testarpropaganda: commandTestarPropaganda,
+  testarbomdia: commandTestarBomDia,
   testarfotopresidente: commandTestarFotoPresidente,
   testarresultadoeleicao: commandTestarResultadoEleicao,
   otario: commandOtario,
@@ -1113,7 +1115,11 @@ async function commandTestarPropaganda({ sock, groupJid }) {
   return sendAdToGroup(sock, groupJid);
 }
 
-async function sendMorningMessage(sock) {
+// Bom dia: cartao de previsao em imagem (src/weatherCard.js) com o texto como
+// legenda. Se a previsao ou a imagem falharem, cai no texto com o bloco de
+// clima (ou so o bom dia, se nem a previsao veio). onlyGroupJid manda so num
+// grupo (usado pelo !testarbomdia).
+async function sendMorningMessage(sock, onlyGroupJid = null) {
   const { date: today } = getBrasiliaNow();
   const holidayName = await getHolidayName(today);
 
@@ -1123,22 +1129,38 @@ async function sendMorningMessage(sock) {
     : `☀️ Bom dia, grupo! Hoje é *${diaSemana}*. Bom trabalho a todos! 💪`;
 
   // Previsao do tempo e so um complemento — se a API estiver fora do ar, o
-  // bom dia sai do mesmo jeito, so sem o bloco de clima.
+  // bom dia sai do mesmo jeito, so sem o clima.
+  let weather = [];
   try {
-    const weatherBlock = await getWeatherBlock();
-    if (weatherBlock) text += `\n\n${weatherBlock}`;
+    weather = await getWeatherData();
   } catch (err) {
     console.error('Erro ao buscar previsao do tempo pra mensagem de bom dia:', err);
   }
 
-  const participating = await sock.groupFetchAllParticipating();
-  for (const groupJid of Object.keys(participating)) {
+  let image = null;
+  if (weather.length > 0) {
     try {
-      await sock.sendMessage(groupJid, { text });
+      image = await renderWeatherCard(weather);
+    } catch (err) {
+      console.error('Erro ao montar o cartao de previsao (mandando em texto):', err);
+      text += `\n\n${formatWeatherBlock(weather)}`;
+    }
+  }
+
+  const groupJids = onlyGroupJid ? [onlyGroupJid] : Object.keys(await sock.groupFetchAllParticipating());
+  for (const groupJid of groupJids) {
+    try {
+      const sent = await sock.sendMessage(groupJid, image ? { image, caption: text } : { text });
+      if (sent?.key?.id) sentByBot.add(sent.key.id);
     } catch (err) {
       console.error(`Erro ao enviar mensagem de bom dia para ${groupJid}:`, err);
     }
   }
+}
+
+// !testarbomdia — manda o bom dia so no grupo onde foi digitado (pra ver como fica).
+async function commandTestarBomDia({ sock, groupJid }) {
+  await sendMorningMessage(sock, groupJid);
 }
 
 // Mensagem automatica das 18h: soma o tempo "perdido" e o ranking completo do

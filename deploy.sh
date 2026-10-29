@@ -27,7 +27,16 @@ git reset -q --hard "$NEW"
 # Dependencias so se o package.json / package-lock.json mudaram.
 if ! git diff --quiet "$OLD" "$NEW" -- package.json package-lock.json; then
   log "dependencias mudaram, rodando npm install..."
-  npm install --omit=dev --no-audit --no-fund --silent
+  # Se a instalacao falhar, volta pro commit anterior e NAO reinicia (senao o
+  # codigo novo ficaria no disco sem as dependencias e o proximo ciclo nao
+  # tentaria de novo, ja que o HEAD ja seria o novo).
+  if ! npm install --omit=dev --no-audit --no-fund --silent 2>/tmp/bothierry-npm-error.txt; then
+    log "ERRO no npm install — voltando pro commit ${OLD:0:7}, bot NAO reiniciado:"
+    cat /tmp/bothierry-npm-error.txt
+    git reset -q --hard "$OLD"
+    echo "$NEW" > "$FAILED_FILE"
+    exit 1
+  fi
 fi
 
 # Valida a sintaxe de todos os arquivos antes de reiniciar.
