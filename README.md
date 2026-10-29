@@ -178,6 +178,7 @@ Tudo em `src/` (JavaScript, módulos ES):
 | `groupPhoto.js` | Foto do grupo/bot editada por IA |
 | `avatars.js` | Cache de fotos de perfil dos membros |
 | `displayNames.js` | **Nome padronizado** de cada pessoa (acento, maiúsculas, homônimos) — usado em **todo lugar**: painel, rankings do WhatsApp, `!resumo`, eventos, perguntas sobre dados e aniversários |
+| `morning.js` | Regras do bom dia: em quais dias sai (seg–sex + datas extras de fim de semana) e o texto de abertura |
 | `weather.js` | Previsão do tempo (Open-Meteo): dados por cidade e texto de reserva. Além das cidades fixas, aceita **cidades temporárias** com data de início e fim (`TEMPORARY_CITIES`; ex.: Tietê de 30/10 a 02/11) que saem sozinhas |
 | `weatherCard.js` | Desenha o **cartão de previsão** do bom dia (SVG → PNG com o resvg), estilo do painel |
 | `news.js` | Manchetes do G1 (RSS), usadas pela foto do grupo |
@@ -232,7 +233,7 @@ Todas dentro do processo do bot (`node-cron`, fuso `America/Sao_Paulo`, tolerân
 | 00:01 | sincroniza o nome do grupo (reverte renomeações do dia anterior) |
 | 03:00 | arquiva mensagens antigas e poda métricas |
 | 03:30 | troca a foto do bot se o tema mudou; sincroniza fotos de perfil |
-| 08:00 (seg–sex) | bom dia + feriado nacional + **cartão de previsão do tempo** (imagem; se falhar, vai em texto) |
+| 08:00 (seg–sex; mais as datas extras de fim de semana em `morning.js`) | bom dia + feriado nacional + **cartão de previsão do tempo** (imagem; se falhar, vai em texto) |
 | 08:00 (seg e qua) | atualiza a foto do grupo com a notícia do dia (via IA) |
 | 09:00 | aviso de aniversariantes (**cartão em imagem** com a foto; texto se falhar) + renomeia o grupo |
 | 18:00 (seg–sex) | ranking do expediente (08h–18h) |

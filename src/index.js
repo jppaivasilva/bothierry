@@ -39,6 +39,7 @@ import { recordConnectionEvent, recordMessage, recordCommandUsage, recordCronRun
 import { startDashboardServer, createLoginToken } from './dashboard.js';
 import { getWeatherData, formatWeatherBlock } from './weather.js';
 import { renderWeatherCard } from './weatherCard.js';
+import { shouldSendMorning, isWeekend, morningGreeting } from './morning.js';
 import { renderBirthdayCard, photoToDataUri } from './birthdayCard.js';
 import { formatDisplayName } from './displayNames.js';
 import { resolveBirthdayMember, birthdayDisplayName, normalizeName } from './birthdayLinks.js';
@@ -1146,9 +1147,7 @@ async function sendMorningMessage(sock, onlyGroupJid = null) {
   const holidayName = await getHolidayName(today);
 
   const diaSemana = new Intl.DateTimeFormat('pt-BR', { timeZone: TIMEZONE, weekday: 'long' }).format(new Date());
-  let text = holidayName
-    ? `☀️ Bom dia, grupo! Hoje é *${diaSemana}*, feriado nacional: *${holidayName}* 🎉 Aproveitem o dia de folga!`
-    : `☀️ Bom dia, grupo! Hoje é *${diaSemana}*. Bom trabalho a todos! 💪`;
+  let text = morningGreeting({ diaSemana, holidayName, weekend: isWeekend(today) });
 
   // Previsao do tempo e so um complemento — se a API estiver fora do ar, o
   // bom dia sai do mesmo jeito, so sem o clima.
@@ -1930,9 +1929,12 @@ cron.schedule(
   CRON_OPTIONS
 );
 
+// Roda todo dia as 8h, mas so manda nos dias de semana (e nas datas extras de
+// fim de semana, veja morning.js).
 cron.schedule(
-  `0 ${MORNING_HOUR} * * 1-5`,
+  `0 ${MORNING_HOUR} * * *`,
   () => {
+    if (!shouldSendMorning(getBrasiliaNow().date)) return;
     recordCronRun('bom_dia');
     if (currentSock) sendMorningMessage(currentSock).catch((err) => console.error('Erro ao enviar mensagem de bom dia (cron):', err));
   },
