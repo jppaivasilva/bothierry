@@ -7,6 +7,7 @@ import { getDashboardData, getMessagesPerHourForDate, getSystemStats, getSystemS
 import { getCountsBetween, getMainGroupJid, getMessageTrend, getActivityHeatmap, getTopSenderPerHour, getMemberList, getMemberStats } from './db.js';
 import { loadBirthdays } from './birthdays.js';
 import { resolveBirthdayMember, suggestBirthdayMembers, setBirthdayLink, normalizeName } from './birthdayLinks.js';
+import { getMembersWithExtras, addExtraMember, removeExtraMember } from './extraMembers.js';
 import { birthdayPhotoPath, birthdayPhotoVersion, deleteBirthdayPhoto, memberPhotoPath, memberPhotoVersion, saveMemberPhoto, deleteMemberPhoto } from './birthdayPhotos.js';
 import { BOT_PHOTO_PATH } from './groupPhoto.js';
 import { formatDisplayName } from './displayNames.js';
@@ -153,8 +154,7 @@ function getUploadedPhotoMap() {
   if (Date.now() - uploadedPhotoMap.ts < 30_000) return uploadedPhotoMap.map;
   const map = new Map();
   try {
-    const groupJid = getMainGroupJid();
-    const members = groupJid ? getMemberList(groupJid) : [];
+    const members = getMembersWithExtras();
     for (const b of loadBirthdays()) {
       if (!birthdayPhotoVersion(b.name)) continue;
       const match = resolveBirthdayMember(b, members);
@@ -693,7 +693,10 @@ const DASHBOARD_HTML = `<!doctype html>
 
   <div id="tab-members" class="tab-panel">
   <div class="sub">Todas as pessoas do grupo, em ordem de mensagens hoje (quem não falou fica por último) · clique em alguém pra ver os detalhes</div>
-  <input type="text" id="memberSearch" class="member-search" placeholder="Buscar por nome..." />
+  <div style="display:flex; gap:10px; align-items:flex-start; flex-wrap:wrap;">
+    <input type="text" id="memberSearch" class="member-search" placeholder="Buscar por nome..." />
+    <button class="action-btn admin-only" id="addPersonBtn">➕ Adicionar pessoa</button>
+  </div>
   <div id="memberGrid" class="member-grid"></div>
   </div>
 
@@ -1270,11 +1273,11 @@ function renderMemberGrid(members) {
   grid.innerHTML = members
     .map(
       (m) =>
-        '<div class="member-card" data-jid="' + escapeHtml(m.jid) + '">' +
+        '<div class="member-card" data-jid="' + escapeHtml(m.jid) + '"' + (m.manual ? ' data-manual="1"' : '') + '>' +
         avatarImg(m.jid, m.name, 'avatar-mini') +
         '<div style="min-width:0;">' +
         '<div class="member-card-name">' + escapeHtml(m.name) + '</div>' +
-        '<div class="member-card-sub">' + m.todayCount + ' msgs hoje</div>' +
+        '<div class="member-card-sub">' + (m.manual ? 'adicionado(a) na mão' : m.todayCount + ' msgs hoje') + '</div>' +
         '</div></div>',
     )
     .join('');
@@ -1293,11 +1296,33 @@ document.getElementById('memberGrid').addEventListener('click', (e) => {
   const card = e.target.closest('.member-card');
   if (!card) return;
   // Admin: tocar na FOTO abre o menu de foto (enviar / remover); no resto do card, os detalhes.
-  if (isAdminUser && e.target.closest('.avatar-mini, .avatar-fallback')) {
+  if (isAdminUser && (card.dataset.manual || e.target.closest('.avatar-mini, .avatar-fallback'))) {
     openPhotoMenu(card.dataset.jid, card.querySelector('.member-card-name').textContent);
     return;
   }
+  if (card.dataset.manual) return; // sem mensagens, nao ha detalhes pra mostrar
   openMemberModal(card.dataset.jid);
+});
+
+document.getElementById('addPersonBtn').addEventListener('click', async () => {
+  const name = prompt('Nome da pessoa (ex.: Vini ou Felipe Lopes):');
+  if (!name || !name.trim()) return;
+  try {
+    const res = await fetch('/api/admin/extra-members', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'panel' },
+      body: JSON.stringify({ name: name.trim() }),
+    });
+    const data = await res.json();
+    if (!data.ok) { alert('Não deu: ' + (data.error || 'erro')); return; }
+    allMembers = null;
+    membersLoadedAt = 0;
+    await loadMembers();
+    if (typeof loadBdayAdmin === 'function') loadBdayAdmin();
+    menuData = null;
+  } catch {
+    alert('Não consegui falar com o bot. Tenta de novo.');
+  }
 });
 
 // Menu da foto de um membro (so admin): enviar/trocar uma foto da galeria, ou
@@ -1316,6 +1341,7 @@ function openPhotoMenu(jid, name) {
     '<div class="modal-header-sub">' + (hasUpload ? 'Foto enviada por você' : 'Foto do WhatsApp ou inicial') + '</div></div></div>' +
     '<label class="action-btn photo-menu-btn">📷 ' + (hasUpload ? 'Trocar foto' : 'Enviar foto') + '<input type="file" accept="image/*" hidden /></label>' +
     (hasUpload ? '<button class="action-btn photo-menu-btn photo-remove">🗑️ Remover foto enviada</button>' : '') +
+    (member && member.manual ? '<button class="action-btn photo-menu-btn photo-remove photo-remove-person">Remover ' + escapeHtml(name) + ' da lista</button>' : '') +
     '<button class="action-btn photo-menu-btn photo-cancel">Cancelar</button>' +
     '<div class="photo-menu-msg menu-desc" style="margin-top:8px;"></div></div>';
   document.body.appendChild(overlay);
@@ -1346,7 +1372,14 @@ function openPhotoMenu(jid, name) {
       }));
     } catch { msg.textContent = 'Não consegui enviar. Tenta de novo.'; }
   });
-  const remove = overlay.querySelector('.photo-remove');
+  const removePerson = overlay.querySelector('.photo-remove-person');
+  if (removePerson) removePerson.addEventListener('click', async () => {
+    if (!confirm('Remover ' + name + ' da lista de membros? A foto enviada e as ligações dele também saem.')) return;
+    try {
+      finish(await fetch('/api/admin/extra-members/delete?jid=' + encodeURIComponent(jid), { method: 'POST', headers: { 'X-Requested-With': 'panel' } }));
+    } catch { msg.textContent = 'Não consegui remover. Tenta de novo.'; }
+  });
+  const remove = overlay.querySelector('.photo-remove:not(.photo-remove-person)');
   if (remove) remove.addEventListener('click', async () => {
     if (!confirm('Remover a foto enviada de ' + name + '?')) return;
     try {
@@ -2267,8 +2300,7 @@ export function startDashboardServer(
         .catch((e) => sendJson(res, 500, { lines: [], error: e.code === 'ENOENT' ? 'arquivo de log não encontrado' : 'não consegui ler o log' }));
     } else if (req.url === '/api/admin/birthday-links' && req.method === 'GET') {
       if (!isAdmin(req)) return sendJson(res, 403, { error: 'só o administrador pode ver isso' });
-      const groupJid = getMainGroupJid();
-      const members = groupJid ? getMemberList(groupJid) : [];
+      const members = getMembersWithExtras();
       const birthdays = [...loadBirthdays()]
         .sort((a, b) => a.month - b.month || a.day - b.day)
         .map((b) => {
@@ -2292,22 +2324,42 @@ export function startDashboardServer(
         }
         const exists = loadBirthdays().some((b) => normalizeName(b.name) === normalizeName(data.name));
         if (!exists) return sendJson(res, 404, { ok: false, error: 'aniversariante não encontrado' });
-        const groupJid = getMainGroupJid();
-        const members = groupJid ? getMemberList(groupJid) : [];
+        const members = getMembersWithExtras();
         if (data.jid && !members.some((m) => m.jid === data.jid)) return sendJson(res, 400, { ok: false, error: 'membro não encontrado' });
         setBirthdayLink(data.name, data.jid || null);
         invalidateUploadedPhotoMap();
         console.log(`[painel] ligação do aniversariante "${data.name}": ${data.jid || 'automático'}`);
         sendJson(res, 200, { ok: true });
       });
+    } else if (req.url === '/api/admin/extra-members' && req.method === 'POST') {
+      if (!isAdmin(req)) return sendJson(res, 403, { ok: false, error: 'só o administrador pode fazer isso' });
+      if (!isPanelRequest(req)) return sendJson(res, 403, { ok: false, error: 'requisição inválida' });
+      readJsonBody(req, (err, data) => {
+        if (err || typeof data.name !== 'string') return sendJson(res, 400, { ok: false, error: 'pedido inválido' });
+        const result = addExtraMember(data.name);
+        if (result.ok) {
+          invalidateUploadedPhotoMap();
+          console.log(`[painel] pessoa adicionada na mão: "${result.member.name}"`);
+        }
+        sendJson(res, result.ok ? 200 : 400, result);
+      });
+    } else if (req.url.startsWith('/api/admin/extra-members/delete') && req.method === 'POST') {
+      if (!isAdmin(req)) return sendJson(res, 403, { ok: false, error: 'só o administrador pode fazer isso' });
+      if (!isPanelRequest(req)) return sendJson(res, 403, { ok: false, error: 'requisição inválida' });
+      req.resume();
+      const jid = new URL(req.url, 'http://localhost').searchParams.get('jid') || '';
+      if (!removeExtraMember(jid)) return sendJson(res, 404, { ok: false, error: 'pessoa não encontrada (só dá pra remover as adicionadas na mão)' });
+      deleteMemberPhoto(jid);
+      invalidateUploadedPhotoMap();
+      console.log(`[painel] pessoa adicionada na mão removida: ${jid}`);
+      sendJson(res, 200, { ok: true });
     } else if (req.url.startsWith('/api/admin/member-photo') && req.method === 'POST') {
       if (!isAdmin(req)) return sendJson(res, 403, { ok: false, error: 'só o administrador pode fazer isso' });
       if (!isPanelRequest(req)) return sendJson(res, 403, { ok: false, error: 'requisição inválida' });
       const url = new URL(req.url, 'http://localhost');
       const jid = url.searchParams.get('jid') || '';
       const isDelete = url.pathname.endsWith('/delete');
-      const groupJid = getMainGroupJid();
-      const members = groupJid ? getMemberList(groupJid) : [];
+      const members = getMembersWithExtras();
       if (!members.some((m) => m.jid === jid)) {
         req.resume();
         return sendJson(res, 404, { ok: false, error: 'membro não encontrado' });
@@ -2343,8 +2395,7 @@ export function startDashboardServer(
       const menu = getCommandsMenu();
       // Junta a cada aniversariante o membro ligado (foto + nome), pra conferir
       // na lista se a pessoa certa foi associada.
-      const groupJid = getMainGroupJid();
-      const members = groupJid ? getMemberList(groupJid) : [];
+      const members = getMembersWithExtras();
       menu.birthdays = (menu.birthdays || []).map((b) => {
         const match = resolveBirthdayMember(b, members);
         const member = match ? members.find((m) => m.jid === match.jid) : null;
@@ -2359,8 +2410,7 @@ export function startDashboardServer(
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(groupJid ? getActivityHeatmap(groupJid) : { weekdayNames: [], matrix: [] }));
     } else if (req.url === '/api/members') {
-      const groupJid = getMainGroupJid();
-      const members = groupJid ? getMemberList(groupJid) : [];
+      const members = getMembersWithExtras();
       members.forEach((m) => { m.name = formatDisplayName(m.name); });
       // Ranking de hoje: mais mensagens primeiro; empates (inclusive os com 0, que
       // ficam por ultimo naturalmente) desempatam em ordem alfabetica.
