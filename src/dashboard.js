@@ -7,7 +7,7 @@ import { getDashboardData, getMessagesPerHourForDate, getSystemStats, getSystemS
 import { getCountsBetween, getMainGroupJid, getMessageTrend, getActivityHeatmap, getTopSenderPerHour, getMemberList, getMemberStats } from './db.js';
 import { loadBirthdays } from './birthdays.js';
 import { resolveBirthdayMember, suggestBirthdayMembers, setBirthdayLink, normalizeName } from './birthdayLinks.js';
-import { birthdayPhotoPath, birthdayPhotoVersion, saveBirthdayPhoto, deleteBirthdayPhoto } from './birthdayPhotos.js';
+import { birthdayPhotoPath, birthdayPhotoVersion, saveBirthdayPhoto, deleteBirthdayPhoto, memberPhotoPath, memberPhotoVersion, saveMemberPhoto, deleteMemberPhoto } from './birthdayPhotos.js';
 import { BOT_PHOTO_PATH } from './groupPhoto.js';
 import { formatDisplayName } from './displayNames.js';
 import { getAvatarPath } from './avatars.js';
@@ -160,11 +160,25 @@ function getUploadedPhotoMap() {
       const match = resolveBirthdayMember(b, members);
       if (match) map.set(match.jid, birthdayPhotoPath(b.name));
     }
+    // Foto enviada pela lista de membros vence a enviada pelo nome do aniversariante.
+    for (const m of members) {
+      if (memberPhotoVersion(m.jid)) map.set(m.jid, memberPhotoPath(m.jid));
+    }
   } catch {
     // sem dados — cai nas fotos do WhatsApp
   }
   uploadedPhotoMap = { ts: Date.now(), map };
   return map;
+}
+
+function uploadedPhotoVersionFor(jid) {
+  const filePath = getUploadedPhotoMap().get(jid);
+  if (!filePath) return null;
+  try {
+    return Math.round(fs.statSync(filePath).mtimeMs);
+  } catch {
+    return null;
+  }
 }
 
 // Serve a foto enviada reduzida (as de 700px pesariam demais numa grade de
@@ -515,6 +529,11 @@ const DASHBOARD_HTML = `<!doctype html>
     padding: 14px; transition: transform .15s var(--ease-out), box-shadow .15s var(--ease-out), background .15s var(--ease-out);
   }
   .member-card:hover { background: rgba(255,255,255,.88); transform: translateY(-2px); box-shadow: 0 12px 30px rgba(31,41,55,.14); }
+  .is-admin .member-card .avatar-mini, .is-admin .member-card .avatar-fallback, .is-admin .modal-header .avatar-mini, .is-admin .modal-header .avatar-fallback { cursor: pointer; transition: transform .15s var(--ease-out); }
+  .is-admin .member-card .avatar-mini:hover, .is-admin .member-card .avatar-fallback:hover { transform: scale(1.12); }
+  .photo-menu { max-width: 340px !important; padding: 22px !important; }
+  .photo-menu-btn { display: block; width: 100%; text-align: center; margin-top: 8px; box-sizing: border-box; padding: 12px; font-size: 14px; cursor: pointer; }
+  .photo-menu .photo-remove { color: #d70015; border-color: rgba(215,0,21,.25); }
   .member-card:active { transform: scale(0.98); }
   .member-card .avatar-mini, .member-card .avatar-fallback { width: 44px; height: 44px; font-size: 15px; }
   .member-card-name { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1213,8 +1232,11 @@ function avatarFallback(img) {
   img.replaceWith(div);
 }
 
+// jid -> versao da foto (muda quando o admin troca a foto): fura o cache do navegador.
+const avatarBust = {};
+
 function avatarImg(jid, name, cls) {
-  const src = '/avatar?jid=' + encodeURIComponent(jid);
+  const src = '/avatar?jid=' + encodeURIComponent(jid) + (avatarBust[jid] ? '&v=' + avatarBust[jid] : '');
   return '<img class="' + cls + '" src="' + src + '" alt="" data-initials="' + escapeHtml(initials(name)) + '" onerror="avatarFallback(this)" />';
 }
 
@@ -1240,6 +1262,7 @@ async function loadMembers() {
 }
 
 function renderMemberGrid(members) {
+  members.forEach((m) => { if (m.photoV) avatarBust[m.jid] = m.photoV; });
   const grid = document.getElementById('memberGrid');
   if (members.length === 0) {
     grid.innerHTML = '<div class="member-empty">Nenhum membro encontrado.</div>';
@@ -1269,8 +1292,70 @@ document.getElementById('memberSearch').addEventListener('input', (e) => {
 // atributo onclick.
 document.getElementById('memberGrid').addEventListener('click', (e) => {
   const card = e.target.closest('.member-card');
-  if (card) openMemberModal(card.dataset.jid);
+  if (!card) return;
+  // Admin: tocar na FOTO abre o menu de foto (enviar / remover); no resto do card, os detalhes.
+  if (isAdminUser && e.target.closest('.avatar-mini, .avatar-fallback')) {
+    openPhotoMenu(card.dataset.jid, card.querySelector('.member-card-name').textContent);
+    return;
+  }
+  openMemberModal(card.dataset.jid);
 });
+
+// Menu da foto de um membro (so admin): enviar/trocar uma foto da galeria, ou
+// remover a enviada (volta pra do WhatsApp, se houver).
+function openPhotoMenu(jid, name) {
+  const member = (allMembers || []).find((m) => m.jid === jid);
+  const hasUpload = !!(member && member.photoV);
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.style.zIndex = 60;
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML =
+    '<div class="modal-card photo-menu">' +
+    '<div class="modal-header" style="margin-bottom:14px;">' + avatarImg(jid, name, 'avatar-mini') +
+    '<div><div class="modal-header-name" style="font-size:18px;">' + escapeHtml(name) + '</div>' +
+    '<div class="modal-header-sub">' + (hasUpload ? 'Foto enviada por você' : 'Foto do WhatsApp ou inicial') + '</div></div></div>' +
+    '<label class="action-btn photo-menu-btn">📷 ' + (hasUpload ? 'Trocar foto' : 'Enviar foto') + '<input type="file" accept="image/*" hidden /></label>' +
+    (hasUpload ? '<button class="action-btn photo-menu-btn photo-remove">🗑️ Remover foto enviada</button>' : '') +
+    '<button class="action-btn photo-menu-btn photo-cancel">Cancelar</button>' +
+    '<div class="photo-menu-msg menu-desc" style="margin-top:8px;"></div></div>';
+  document.body.appendChild(overlay);
+  const msg = overlay.querySelector('.photo-menu-msg');
+
+  async function finish(res) {
+    const data = await res.json().catch(() => ({}));
+    if (!data.ok) { msg.textContent = 'Não deu: ' + (data.error || 'erro'); return; }
+    avatarBust[jid] = Date.now();
+    overlay.remove();
+    closeMemberModal();
+    allMembers = null;
+    membersLoadedAt = 0;
+    await loadMembers();
+    if (typeof loadBdayAdmin === 'function') loadBdayAdmin();
+    menuData = null;
+  }
+
+  overlay.querySelector('input[type=file]').addEventListener('change', async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    msg.textContent = 'Enviando...';
+    try {
+      finish(await fetch('/api/admin/member-photo?jid=' + encodeURIComponent(jid), {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'panel', 'Content-Type': file.type || 'application/octet-stream' },
+        body: file,
+      }));
+    } catch { msg.textContent = 'Não consegui enviar. Tenta de novo.'; }
+  });
+  const remove = overlay.querySelector('.photo-remove');
+  if (remove) remove.addEventListener('click', async () => {
+    if (!confirm('Remover a foto enviada de ' + name + '?')) return;
+    try {
+      finish(await fetch('/api/admin/member-photo/delete?jid=' + encodeURIComponent(jid), { method: 'POST', headers: { 'X-Requested-With': 'panel' } }));
+    } catch { msg.textContent = 'Não consegui remover. Tenta de novo.'; }
+  });
+  overlay.querySelector('.photo-cancel').addEventListener('click', () => overlay.remove());
+}
 
 const WEEKDAY_SHORT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const HEAT_COLORS = ['rgba(0,122,255,.08)', 'rgba(0,122,255,.28)', 'rgba(0,122,255,.5)', 'rgba(0,122,255,.75)', 'rgba(0,122,255,1)'];
@@ -1324,7 +1409,10 @@ async function openMemberModal(jid) {
 
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
-  overlay.onclick = (e) => { if (e.target === overlay) closeMemberModal(); };
+  overlay.onclick = (e) => {
+    if (e.target === overlay) { closeMemberModal(); return; }
+    if (isAdminUser && e.target.closest('.modal-header .avatar-mini, .modal-header .avatar-fallback')) openPhotoMenu(s.jid, s.name);
+  };
   overlay.innerHTML =
     '<div class="modal-card">' +
     '<button class="modal-close" onclick="closeMemberModal()">✕</button>' +
@@ -1362,8 +1450,9 @@ function closeMemberModal() {
 
 // Papel de quem esta logado — admin ve os botoes de apagar/reiniciar/logs
 // (o servidor tambem barra essas rotas pra quem nao e admin).
+let isAdminUser = false;
 fetch('/api/me').then((r) => r.json()).then((me) => {
-  if (me.role === 'admin') { document.body.classList.add('is-admin'); loadBdayAdmin(); }
+  if (me.role === 'admin') { isAdminUser = true; document.body.classList.add('is-admin'); loadBdayAdmin(); }
   // Quem entrou pelo link do !painel veio pra marcar presenca: ja abre em Eventos.
   if (me.role === 'member') document.querySelector('button[data-tab=events]').click();
 }).catch(() => {});
@@ -1534,9 +1623,11 @@ async function loadBdayAdmin() {
       return '<div class="bday-row">' + photo +
         '<div class="who">' + escapeHtml(b.name) + '<small>' + pad(b.day) + '/' + pad(b.month) + '</small></div>' + tag +
         '<select data-idx="' + i + '">' + options + '</select>' +
-        '<label class="action-btn bday-upload">' + (b.photoV ? 'Trocar foto' : 'Enviar foto') +
-        '<input type="file" accept="image/*" data-idx="' + i + '" hidden /></label>' +
-        (b.photoV ? '<button class="action-btn bday-photo-del" data-idx="' + i + '">Remover foto</button>' : '') +
+        (b.jid
+          ? '<span class="menu-desc" style="margin:0;">foto: toque na foto na aba Membros</span>'
+          : '<label class="action-btn bday-upload">' + (b.photoV ? 'Trocar foto' : 'Enviar foto') +
+            '<input type="file" accept="image/*" data-idx="' + i + '" hidden /></label>' +
+            (b.photoV ? '<button class="action-btn bday-photo-del" data-idx="' + i + '">Remover foto</button>' : '')) +
         (b.suggestions || []).map((m) => '<button class="action-btn bday-suggest" data-idx="' + i + '" data-jid="' + escapeHtml(m.jid) + '">Usar ' + escapeHtml(m.name) + '</button>').join('') +
         '</div>';
     }).join('');
@@ -2247,6 +2338,42 @@ export function startDashboardServer(
         console.log(`[painel] ligação do aniversariante "${data.name}": ${data.jid || 'automático'}`);
         sendJson(res, 200, { ok: true });
       });
+    } else if (req.url.startsWith('/api/admin/member-photo') && req.method === 'POST') {
+      if (!isAdmin(req)) return sendJson(res, 403, { ok: false, error: 'só o administrador pode fazer isso' });
+      if (!isPanelRequest(req)) return sendJson(res, 403, { ok: false, error: 'requisição inválida' });
+      const url = new URL(req.url, 'http://localhost');
+      const jid = url.searchParams.get('jid') || '';
+      const isDelete = url.pathname.endsWith('/delete');
+      const groupJid = getMainGroupJid();
+      const members = groupJid ? getMemberList(groupJid) : [];
+      if (!members.some((m) => m.jid === jid)) {
+        req.resume();
+        return sendJson(res, 404, { ok: false, error: 'membro não encontrado' });
+      }
+      if (isDelete) {
+        req.resume();
+        deleteMemberPhoto(jid);
+        // Tira tambem a foto enviada pelo nome de um aniversariante ligado a esse membro,
+        // senao ela ficaria valendo no lugar.
+        for (const b of loadBirthdays()) {
+          if (birthdayPhotoVersion(b.name) && resolveBirthdayMember(b, members)?.jid === jid) deleteBirthdayPhoto(b.name);
+        }
+        invalidateUploadedPhotoMap();
+        console.log(`[painel] foto enviada do membro ${jid} removida`);
+        return sendJson(res, 200, { ok: true });
+      }
+      readRawBody(req, PHOTO_UPLOAD_MAX_BYTES, async (err, buffer) => {
+        if (err?.tooLarge) return sendJson(res, 413, { ok: false, error: 'foto grande demais (máx. 15 MB)' });
+        if (err || !buffer || buffer.length === 0) return sendJson(res, 400, { ok: false, error: 'não recebi a foto' });
+        try {
+          await saveMemberPhoto(jid, buffer);
+          invalidateUploadedPhotoMap();
+          console.log(`[painel] foto enviada pro membro ${jid} (${Math.round(buffer.length / 1024)} KB)`);
+          sendJson(res, 200, { ok: true });
+        } catch {
+          sendJson(res, 400, { ok: false, error: 'esse arquivo não parece uma imagem válida' });
+        }
+      });
     } else if (req.url.startsWith('/api/admin/birthday-photo') && req.method === 'POST') {
       if (!isAdmin(req)) return sendJson(res, 403, { ok: false, error: 'só o administrador pode fazer isso' });
       if (!isPanelRequest(req)) return sendJson(res, 403, { ok: false, error: 'requisição inválida' });
@@ -2306,6 +2433,8 @@ export function startDashboardServer(
       // Ranking de hoje: mais mensagens primeiro; empates (inclusive os com 0, que
       // ficam por ultimo naturalmente) desempatam em ordem alfabetica.
       members.sort((a, b) => b.todayCount - a.todayCount || a.name.localeCompare(b.name, 'pt-BR'));
+      // photoV: versao da foto enviada na mao (null = usa a do WhatsApp/inicial).
+      members.forEach((m) => { m.photoV = uploadedPhotoVersionFor(m.jid); });
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(members));
     } else if (req.url.startsWith('/api/member')) {

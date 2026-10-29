@@ -46,19 +46,65 @@ export function readBirthdayPhoto(name) {
  * Lanca erro se nao for uma imagem valida.
  */
 export async function saveBirthdayPhoto(name, buffer) {
+  const jpeg = await toSquareJpeg(buffer);
+  fs.mkdirSync(BIRTHDAY_PHOTOS_DIR, { recursive: true });
+  fs.writeFileSync(birthdayPhotoPath(name), jpeg);
+}
+
+// Confere que e imagem, corrige a rotacao (EXIF), corta quadrado mirando no rosto e reduz.
+async function toSquareJpeg(buffer) {
   const sharp = (await import('sharp')).default;
-  const jpeg = await sharp(buffer, { failOn: 'error' })
+  return sharp(buffer, { failOn: 'error' })
     .rotate()
     .resize(PHOTO_SIZE_PX, PHOTO_SIZE_PX, { fit: 'cover', position: sharp.strategy.attention })
     .jpeg({ quality: 86 })
     .toBuffer();
-  fs.mkdirSync(BIRTHDAY_PHOTOS_DIR, { recursive: true });
-  fs.writeFileSync(birthdayPhotoPath(name), jpeg);
 }
 
 export function deleteBirthdayPhoto(name) {
   try {
     fs.unlinkSync(birthdayPhotoPath(name));
+  } catch {
+    // ja nao existia
+  }
+}
+
+// ---------- fotos por MEMBRO (jid): enviadas pela lista de membros do painel ----------
+// Valem pra qualquer membro (tenha aniversario ou nao) e vencem a foto do
+// WhatsApp e a enviada pelo nome do aniversariante.
+export const MEMBER_PHOTOS_DIR = path.join(__dirname, '..', 'member_photos');
+
+export function memberPhotoPath(jid) {
+  return path.join(MEMBER_PHOTOS_DIR, `${String(jid).replace(/[^a-zA-Z0-9.-]/g, '_')}.jpg`);
+}
+
+export function memberPhotoVersion(jid) {
+  try {
+    const { mtimeMs, size } = fs.statSync(memberPhotoPath(jid));
+    return size > 0 ? Math.round(mtimeMs) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function readMemberPhoto(jid) {
+  try {
+    const buffer = fs.readFileSync(memberPhotoPath(jid));
+    return buffer.length > 0 ? buffer : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function saveMemberPhoto(jid, buffer) {
+  const jpeg = await toSquareJpeg(buffer);
+  fs.mkdirSync(MEMBER_PHOTOS_DIR, { recursive: true });
+  fs.writeFileSync(memberPhotoPath(jid), jpeg);
+}
+
+export function deleteMemberPhoto(jid) {
+  try {
+    fs.unlinkSync(memberPhotoPath(jid));
   } catch {
     // ja nao existia
   }

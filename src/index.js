@@ -42,7 +42,7 @@ import { renderWeatherCard } from './weatherCard.js';
 import { renderBirthdayCard, photoToDataUri } from './birthdayCard.js';
 import { formatDisplayName } from './displayNames.js';
 import { resolveBirthdayMember, birthdayDisplayName, normalizeName } from './birthdayLinks.js';
-import { readBirthdayPhoto } from './birthdayPhotos.js';
+import { readBirthdayPhoto, readMemberPhoto } from './birthdayPhotos.js';
 import { getPresidentSummary, getUrnasApuradasPorRegiao } from './elections.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -1092,7 +1092,7 @@ async function buildBirthdayCard(sock, people, members = getBirthdayMembers()) {
     const match = resolveBirthdayMember(person, members);
     let photoUri = null;
     try {
-      const uploaded = readBirthdayPhoto(person.name);
+      const uploaded = (match && readMemberPhoto(match.jid)) || readBirthdayPhoto(person.name);
       const buffer = uploaded || (match ? await getBirthdayPhotoBuffer(sock, match.jid) : null);
       if (buffer) photoUri = await photoToDataUri(buffer);
     } catch (err) {
