@@ -233,6 +233,29 @@ export function getGroupJidByName(groupName) {
 }
 
 /**
+ * JID do grupo "principal": o que mais teve mensagens nos ultimos 7 dias (em
+ * empate, o de mensagem mais recente). Serve pra painel/tarefas nao dependerem
+ * do NOME do grupo, que o pessoal muda com frequencia. Retorna null se nao ha
+ * nenhuma mensagem na janela quente.
+ */
+export function getMainGroupJid() {
+  const since = Math.floor(Date.now() / 1000) - 7 * 24 * 60 * 60;
+  const stats = new Map(); // groupJid -> { count, last }
+  for (const r of cache) {
+    if (r.timestamp < since) continue;
+    const entry = stats.get(r.groupJid) || { count: 0, last: 0 };
+    entry.count += 1;
+    entry.last = Math.max(entry.last, r.timestamp);
+    stats.set(r.groupJid, entry);
+  }
+  let best = null;
+  for (const [jid, e] of stats) {
+    if (!best || e.count > best.count || (e.count === best.count && e.last > best.last)) best = { jid, ...e };
+  }
+  return best ? best.jid : null;
+}
+
+/**
  * Lista os JIDs distintos de quem mandou mensagem num grupo, na janela
  * quente (ultimos HOT_WINDOW_DAYS dias) — usado pra saber de quem buscar
  * foto de perfil (nao faz sentido cachear foto de quem nao fala ha meses).
