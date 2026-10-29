@@ -40,7 +40,7 @@ flowchart LR
 
     subgraph Ext["🌐 APIs externas"]
         OAI["OpenAI<br/>(GPT-4o mini, Whisper, imagens)"]
-        OTH["G1 (RSS) · Open-Meteo · BrasilAPI<br/>Imgflip · TSE"]
+        OTH["G1 (RSS) · Open-Meteo · BrasilAPI<br/>TSE"]
     end
 
     G <--> WA
@@ -180,7 +180,7 @@ Tudo em `src/` (JavaScript, módulos ES):
 | `displayNames.js` | **Nome padronizado** de cada pessoa (acento, maiúsculas, homônimos) — usado em **todo lugar**: painel, rankings do WhatsApp, `!resumo`, eventos, perguntas sobre dados e aniversários |
 | `weather.js` | Previsão do tempo (Open-Meteo): dados por cidade e texto de reserva |
 | `weatherCard.js` | Desenha o **cartão de previsão** do bom dia (SVG → PNG com o resvg), estilo do painel |
-| `news.js` | Manchetes do G1 (RSS) |
+| `news.js` | Manchetes do G1 (RSS), usadas pela foto do grupo |
 | `elections.js` | Apuração do TSE (eleição 2026, já concluída) |
 | `report.js` | Relatório pelo terminal (`npm run report`) |
 
@@ -251,10 +251,9 @@ Além disso, ao conectar o bot checa aniversário, nome do grupo, tema da foto e
 | **OpenAI** — `gpt-4o-mini` | `!resumo`, regra do iPhone, insultos ao bot, perguntas sobre dados, escolher o tema da foto do grupo a partir da notícia | `OPENAI_API_KEY` |
 | **OpenAI** — `whisper-1` | `!transcrever` | `OPENAI_API_KEY` |
 | **OpenAI** — `gpt-image-1` | edição da foto do grupo/bot (o item mais caro do bot) | `OPENAI_API_KEY` |
-| **G1** (RSS) | `!news` e notícia da foto do grupo | não |
+| **G1** (RSS) | notícia da foto do grupo | não |
 | **Open-Meteo** | previsão do tempo do bom dia (vira o cartão em imagem) | não |
 | **BrasilAPI** | feriados nacionais | não |
-| **Imgflip** | `!meme` (templates populares) | não |
 | **TSE** | apuração das eleições | não |
 | **Cloudflare** | túnel HTTPS e DNS do painel | conta Cloudflare |
 | **Chart.js** (CDN jsDelivr) | gráficos do painel, carregado no navegador | não |
@@ -319,14 +318,11 @@ Use `!` ou `/` no começo. `!menu` lista tudo no próprio WhatsApp (e a aba **Co
 | `!eventos` · `!addevento` · `!vou` · `!naovou` | eventos: listar (com confirmados), cadastrar, confirmar, marcar ausência |
 | `!painel` | manda **no privado** um link de uso único (5 min) pro painel |
 | `!aniversariantes` | lista os aniversariantes cadastrados |
-| `!news` | manchete mais recente do G1 |
 | `!transcrever` | responda um áudio: transcreve (Whisper) |
 | `!figurinha` | responda uma foto: vira figurinha 512×512 |
-| `!renomear Nome` · `!fotogrupo` · `!fotobot` | renomeia o grupo / troca a foto do grupo / do bot (bot precisa ser admin do grupo) |
+| `!renomear Nome` · `!fotogrupo` | renomeia o grupo / troca a foto do grupo (bot precisa ser admin do grupo) |
 | `!audios` · `!<nome>` | lista os áudios; qualquer arquivo de `audios/` vira comando |
 | `!salvaraudio nome` | responda um áudio: salva com o nome escolhido e vira `!nome` |
-| `!meme nome` | template de meme (Imgflip) |
-| `!schedule` | mensagens agendadas pendentes |
 | `!regras` · `!regulamento` · `!megasena` | textos fixos |
 | `!policiafederal` · `!otario` | zoeiras |
 | `!testarpropaganda` *(oculto)* | manda a propaganda só no grupo onde for digitado |
