@@ -1062,6 +1062,7 @@ async function refresh() {
     aniversario: 'Checagem de aniversário',
     foto_bot_tema: 'Foto temática do bot',
     bom_dia: 'Mensagem de bom dia',
+    propaganda: 'Propaganda (#ad) das 22h30',
     fim_expediente: 'Mensagem de fim de expediente',
     foto_grupo_noticia: 'Foto do grupo (notícia)',
     ranking_semanal: 'Ranking semanal',
