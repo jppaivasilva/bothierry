@@ -141,6 +141,55 @@ function getSession(req) {
   }
 }
 
+// Foto enviada na mao (tela de admin) vale tambem pro MEMBRO ligado ao
+// aniversariante: aparece no painel de membros, no ranking etc. (tudo que usa
+// /avatar?jid=). Mapa jid -> arquivo, recalculado a cada 30s ou quando o admin
+// manda/remove foto ou muda uma ligacao.
+let uploadedPhotoMap = { ts: 0, map: new Map() };
+function invalidateUploadedPhotoMap() {
+  uploadedPhotoMap.ts = 0;
+}
+function getUploadedPhotoMap() {
+  if (Date.now() - uploadedPhotoMap.ts < 30_000) return uploadedPhotoMap.map;
+  const map = new Map();
+  try {
+    const groupJid = getMainGroupJid();
+    const members = groupJid ? getMemberList(groupJid) : [];
+    for (const b of loadBirthdays()) {
+      if (!birthdayPhotoVersion(b.name)) continue;
+      const match = resolveBirthdayMember(b, members);
+      if (match) map.set(match.jid, birthdayPhotoPath(b.name));
+    }
+  } catch {
+    // sem dados — cai nas fotos do WhatsApp
+  }
+  uploadedPhotoMap = { ts: Date.now(), map };
+  return map;
+}
+
+// Serve a foto enviada reduzida (as de 700px pesariam demais numa grade de
+// membros que pede dezenas de fotos); cache em memoria por data de alteracao.
+const AVATAR_FROM_UPLOAD_PX = 192;
+async function serveUploadedAvatar(filePath, res) {
+  try {
+    const stat = await fs.promises.stat(filePath);
+    const key = `${filePath}#${AVATAR_FROM_UPLOAD_PX}`;
+    let cached = imageCache.get(key);
+    if (!cached || cached.mtimeMs !== stat.mtimeMs) {
+      const sharp = (await import('sharp')).default;
+      const buffer = await sharp(filePath).resize(AVATAR_FROM_UPLOAD_PX, AVATAR_FROM_UPLOAD_PX, { fit: 'cover' }).jpeg({ quality: 82 }).toBuffer();
+      cached = { mtimeMs: stat.mtimeMs, buffer };
+      imageCache.set(key, cached);
+    }
+    // Cache curto: se o admin trocar a foto, aparece logo.
+    res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=60' });
+    res.end(cached.buffer);
+  } catch {
+    res.writeHead(404, { 'Content-Type': 'text/plain' });
+    res.end('Nao encontrado');
+  }
+}
+
 function isAuthorized(req) {
   if (!DASHBOARD_PASS) return true; // sem senha configurada, nao bloqueia (fallback pro comportamento antigo)
   return getSession(req) !== null;
@@ -2194,6 +2243,7 @@ export function startDashboardServer(
         const members = groupJid ? getMemberList(groupJid) : [];
         if (data.jid && !members.some((m) => m.jid === data.jid)) return sendJson(res, 400, { ok: false, error: 'membro não encontrado' });
         setBirthdayLink(data.name, data.jid || null);
+        invalidateUploadedPhotoMap();
         console.log(`[painel] ligação do aniversariante "${data.name}": ${data.jid || 'automático'}`);
         sendJson(res, 200, { ok: true });
       });
@@ -2211,6 +2261,7 @@ export function startDashboardServer(
       if (isDelete) {
         req.resume();
         deleteBirthdayPhoto(name);
+        invalidateUploadedPhotoMap();
         console.log(`[painel] foto enviada de "${name}" removida`);
         return sendJson(res, 200, { ok: true });
       }
@@ -2219,6 +2270,7 @@ export function startDashboardServer(
         if (err || !buffer || buffer.length === 0) return sendJson(res, 400, { ok: false, error: 'não recebi a foto' });
         try {
           await saveBirthdayPhoto(name, buffer);
+          invalidateUploadedPhotoMap();
           console.log(`[painel] foto enviada pra "${name}" (${Math.round(buffer.length / 1024)} KB)`);
           sendJson(res, 200, { ok: true });
         } catch {
@@ -2285,8 +2337,11 @@ export function startDashboardServer(
     } else if (req.url.startsWith('/avatar')) {
       const url = new URL(req.url, 'http://localhost');
       const jid = url.searchParams.get('jid');
+      const uploaded = jid ? getUploadedPhotoMap().get(jid) : null;
       const avatarPath = jid ? getAvatarPath(jid) : null;
-      if (avatarPath) {
+      if (uploaded) {
+        serveUploadedAvatar(uploaded, res);
+      } else if (avatarPath) {
         serveCachedImage(avatarPath, 'image/jpeg', res);
       } else {
         res.writeHead(404, { 'Content-Type': 'text/plain' });
