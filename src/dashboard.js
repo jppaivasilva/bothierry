@@ -1,6 +1,8 @@
 import http from 'http';
 import fs from 'fs';
 import crypto from 'crypto';
+import os from 'os';
+import path from 'path';
 import { getDashboardData, getMessagesPerHourForDate, getSystemStats, getSystemStatsHistory } from './metrics.js';
 import { getCountsBetween, getGroupJidByName, getMessageTrend, getActivityHeatmap, getTopSenderPerHour, getMemberList, getMemberStats } from './db.js';
 import { BOT_PHOTO_PATH } from './groupPhoto.js';
@@ -374,6 +376,11 @@ const DASHBOARD_HTML = `<!doctype html>
   .menu-desc { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
   .menu-birthday { display: flex; gap: 10px; align-items: baseline; padding: 5px 0; font-size: 13px; color: var(--text-primary); }
   .menu-date { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; font-weight: 700; color: var(--text-secondary); min-width: 38px; }
+  .danger-btn, .action-btn { font-family: inherit; font-size: 13px; font-weight: 600; padding: 8px 14px; border-radius: 12px; border: 1px solid rgba(60,60,67,.14); background: rgba(255,255,255,.7); color: var(--text-primary); cursor: pointer; }
+  .danger-btn { color: #d70015; border-color: rgba(215,0,21,.25); }
+  .danger-btn:active, .action-btn:active { transform: scale(0.96); }
+  .chip-del { border: none; background: none; color: #d70015; font-size: 14px; font-weight: 700; padding: 0 0 0 6px; cursor: pointer; }
+  .log-box { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; line-height: 1.5; color: var(--text-primary); background: rgba(255,255,255,.55); border-radius: 12px; padding: 12px; max-height: 360px; overflow: auto; white-space: pre-wrap; word-break: break-all; margin-top: 12px; }
   .menu-chips { display: flex; flex-wrap: wrap; gap: 6px; }
   .member-search { width: 100%; max-width: 320px; font-size: 14px; font-family: inherit; padding: 10px 14px; border-radius: 12px; border: 1px solid rgba(60,60,67,.14); background: rgba(255,255,255,.7); color: var(--text-primary); outline: none; margin-bottom: 20px; transition: border-color .15s var(--ease-out), box-shadow .15s var(--ease-out); }
   .member-search:focus { border-color: var(--accent-blue); box-shadow: 0 0 0 4px rgba(0,122,255,.14); }
@@ -607,6 +614,19 @@ const DASHBOARD_HTML = `<!doctype html>
         <tbody id="cronsBody"></tbody>
       </table>
     </div>
+  </div>
+  <div class="chart-box" style="margin-top:16px;">
+    <div class="section-head">Ações</div>
+    <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+      <button class="danger-btn" id="restartBtn">Reiniciar bot</button>
+      <span class="menu-desc" id="actionMsg" style="margin:0;"></span>
+    </div>
+    <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:18px;">
+      <div class="section-head" style="margin:0;">Logs</div>
+      <select id="logKind"><option value="out">Saída</option><option value="error">Erros</option></select>
+      <button class="action-btn" id="logRefresh">Atualizar</button>
+    </div>
+    <div class="log-box" id="logBox">Clique em Atualizar.</div>
   </div>
   </div>
 
@@ -1218,7 +1238,11 @@ function renderMenu(query) {
       if (audios.length > 0) {
         extra =
           '<div class="modal-section-label" style="margin-top:14px;">Áudios salvos (mande !nome pra tocar)</div>' +
-          '<div class="menu-chips">' + audios.map((a) => '<span class="menu-cmd">!' + escapeHtml(a) + '</span>').join('') + '</div>';
+          '<div class="menu-chips">' + audios.map((a) =>
+            '<span class="menu-cmd">!' + escapeHtml(a) +
+            (a === 'repetido' ? '' : '<button class="chip-del" data-audio="' + escapeHtml(a) + '" title="Apagar">✕</button>') +
+            '</span>'
+          ).join('') + '</div>';
       }
     } else if (cat.title === 'Aniversários') {
       const birthdays = menuData.birthdays.filter((b) => !q || b.name.toLowerCase().includes(q));
@@ -1246,6 +1270,56 @@ function renderMenu(query) {
 
 document.getElementById('menuSearch').addEventListener('input', (e) => {
   if (menuData) renderMenu(e.target.value);
+});
+
+document.getElementById('menuGrid').addEventListener('click', async (e) => {
+  const btn = e.target.closest('.chip-del');
+  if (!btn) return;
+  const name = btn.dataset.audio;
+  if (!confirm('Apagar o áudio !' + name + '? Não dá pra desfazer.')) return;
+  try {
+    const res = await fetch('/api/audios/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'panel' },
+      body: JSON.stringify({ name }),
+    });
+    const data = await res.json();
+    if (!data.ok) { alert('Não apaguei: ' + (data.error || 'erro')); return; }
+    menuData = null;
+    await loadMenu();
+  } catch {
+    alert('Não consegui falar com o bot. Tenta de novo.');
+  }
+});
+
+async function loadLogs() {
+  const box = document.getElementById('logBox');
+  box.textContent = 'Carregando...';
+  try {
+    const kind = document.getElementById('logKind').value;
+    const res = await fetch('/api/logs?kind=' + kind + '&lines=120', { headers: { 'X-Requested-With': 'panel' } });
+    const data = await res.json();
+    box.textContent = data.lines && data.lines.length ? data.lines.join(String.fromCharCode(10)) : (data.error || 'Sem linhas.');
+    box.scrollTop = box.scrollHeight;
+  } catch {
+    box.textContent = 'Não consegui carregar os logs.';
+  }
+}
+document.getElementById('logRefresh').addEventListener('click', loadLogs);
+document.getElementById('logKind').addEventListener('change', loadLogs);
+
+document.getElementById('restartBtn').addEventListener('click', async () => {
+  if (!confirm('Reiniciar o bot agora? Ele fica fora do ar por uns segundos.')) return;
+  const msg = document.getElementById('actionMsg');
+  try {
+    const res = await fetch('/api/restart', { method: 'POST', headers: { 'X-Requested-With': 'panel' } });
+    const data = await res.json();
+    if (!data.ok) { msg.textContent = 'Não reiniciou: ' + (data.error || 'erro'); return; }
+    msg.textContent = 'Reiniciando… a página recarrega sozinha.';
+    setTimeout(() => location.reload(), 15000);
+  } catch {
+    msg.textContent = 'Não consegui falar com o bot.';
+  }
 });
 
 async function refreshRanking() {
@@ -1468,12 +1542,67 @@ function renderLoginPage(hasError) {
 </html>`;
 }
 
+// Acoes de administracao do painel (apagar audio, reiniciar, ver logs) — so
+// aceitas via POST/GET com o cabecalho X-Requested-With (o fetch do proprio
+// painel manda; um formulario/imagem de outro site nao consegue), alem do
+// login por cookie que ja protege todas as rotas.
+function isPanelRequest(req) {
+  return req.headers['x-requested-with'] === 'panel';
+}
+
+function readJsonBody(req, callback) {
+  let body = '';
+  req.on('data', (chunk) => {
+    body += chunk;
+    if (body.length > 10_000) req.destroy();
+  });
+  req.on('end', () => {
+    try {
+      callback(null, body ? JSON.parse(body) : {});
+    } catch (err) {
+      callback(err);
+    }
+  });
+}
+
+function sendJson(res, status, payload) {
+  res.writeHead(status, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify(payload));
+}
+
+// Ultimas linhas do log do PM2 (saida normal ou erros). Le so o final do
+// arquivo (logs crescem muito numa VM pequena) e tira as linhas "[debug]",
+// que trazem o texto das mensagens do grupo — nao faz sentido mostrar isso
+// aqui, e polui o log.
+const LOG_TAIL_BYTES = 256 * 1024;
+async function readLogTail(kind, maxLines) {
+  const pm2Home = process.env.PM2_HOME || path.join(os.homedir(), '.pm2');
+  const file = path.join(pm2Home, 'logs', `Bothierry-${kind === 'error' ? 'error' : 'out'}.log`);
+  const handle = await fs.promises.open(file, 'r');
+  try {
+    const { size } = await handle.stat();
+    const length = Math.min(size, LOG_TAIL_BYTES);
+    const buffer = Buffer.alloc(length);
+    await handle.read(buffer, 0, length, size - length);
+    return buffer
+      .toString('utf-8')
+      .split('\n')
+      .filter((line) => line && !line.includes('[debug]'))
+      .slice(-maxLines);
+  } finally {
+    await handle.close();
+  }
+}
+
 /**
  * Sobe um servidor HTTP local, bem simples, com um painel de monitoramento
  * (status de conexao, uptime, mensagens por hora, eventos recentes). So
  * modulo nativo 'http' — nenhuma dependencia nova no projeto.
  */
-export function startDashboardServer(port, { getCommandsMenu = () => ({ categories: [], audios: [], birthdays: [] }) } = {}) {
+export function startDashboardServer(
+  port,
+  { getCommandsMenu = () => ({ categories: [], audios: [], birthdays: [] }), deleteAudio = () => ({ ok: false, error: 'indisponível' }) } = {},
+) {
   const server = http.createServer((req, res) => {
     const ip = req.socket.remoteAddress || 'unknown';
     const urlObj = new URL(req.url, 'http://localhost');
@@ -1563,6 +1692,29 @@ export function startDashboardServer(port, { getCommandsMenu = () => ({ categori
       trend.series = trend.series.map((s) => ({ ...s, name: formatDisplayName(s.name) }));
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(trend));
+    } else if (req.url === '/api/audios/delete' && req.method === 'POST') {
+      if (!isPanelRequest(req)) return sendJson(res, 403, { ok: false, error: 'requisição inválida' });
+      readJsonBody(req, (err, data) => {
+        if (err || typeof data.name !== 'string') return sendJson(res, 400, { ok: false, error: 'pedido inválido' });
+        const result = deleteAudio(data.name);
+        console.log(`[painel] apagar áudio "${data.name}": ${result.ok ? 'ok' : result.error}`);
+        sendJson(res, result.ok ? 200 : 400, result);
+      });
+    } else if (req.url === '/api/restart' && req.method === 'POST') {
+      if (!isPanelRequest(req)) return sendJson(res, 403, { ok: false, error: 'requisição inválida' });
+      // So reinicia se estiver rodando sob o PM2 (que sobe o processo de novo);
+      // fora dele, sair derrubaria o bot de vez.
+      if (process.env.pm_id === undefined) return sendJson(res, 409, { ok: false, error: 'o bot não está rodando no PM2' });
+      console.log('[painel] reinício do bot pedido pelo painel');
+      sendJson(res, 200, { ok: true });
+      setTimeout(() => process.exit(0), 500);
+    } else if (req.url.startsWith('/api/logs')) {
+      const url = new URL(req.url, 'http://localhost');
+      const kind = url.searchParams.get('kind') === 'error' ? 'error' : 'out';
+      const lines = Math.min(Math.max(Number(url.searchParams.get('lines')) || 100, 10), 300);
+      readLogTail(kind, lines)
+        .then((list) => sendJson(res, 200, { lines: list }))
+        .catch((e) => sendJson(res, 500, { lines: [], error: e.code === 'ENOENT' ? 'arquivo de log não encontrado' : 'não consegui ler o log' }));
     } else if (req.url === '/api/commands') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(getCommandsMenu()));
