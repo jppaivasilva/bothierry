@@ -710,7 +710,7 @@ const DASHBOARD_HTML = `<!doctype html>
 
   <div id="tab-events" class="tab-panel">
   <div class="sub" id="eventsSub">Próximos eventos do grupo</div>
-  <button class="action-btn admin-only" id="newEventBtn" style="margin-bottom:16px;">➕ Criar evento</button>
+  <button class="action-btn" id="newEventBtn" style="margin-bottom:16px;">➕ Criar evento</button>
   <div id="eventsGrid" class="menu-grid"></div>
   </div>
 
@@ -1728,7 +1728,7 @@ async function loadEvents() {
       '<div class="people-list">' + names(e.attendees) + '</div>' +
       '<div class="modal-section-label" style="margin-top:10px;">Ausentes (' + e.absentees.length + ')</div>' +
       '<div class="people-list">' + names(e.absentees) + '</div>' + buttons +
-      '<button class="action-btn admin-only event-delete" data-idx="' + i + '" style="margin-top:12px;color:#d70015;">🗑️ Excluir evento</button></div>';
+      '<button class="action-btn event-delete" data-idx="' + i + '" style="margin-top:12px;color:#d70015;">🗑️ Excluir evento</button></div>';
   }).join('');
   grid.dataset.titles = JSON.stringify(data.events.map((e) => e.title));
 }
@@ -1764,7 +1764,7 @@ document.getElementById('newEventBtn').addEventListener('click', () => {
     });
     msg.textContent = '';
     try {
-      const res = await fetch('/api/admin/events', {
+      const res = await fetch('/api/events/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'panel' },
         body: JSON.stringify({
@@ -1792,7 +1792,7 @@ document.getElementById('eventsGrid').addEventListener('click', async (e) => {
     const title = titles[Number(del.dataset.idx)];
     if (!confirm('Excluir o evento "' + title + '"? A lista de confirmados dele também some.')) return;
     try {
-      const res = await fetch('/api/admin/events/delete', {
+      const res = await fetch('/api/events/delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'panel' },
         body: JSON.stringify({ title }),
@@ -2205,7 +2205,11 @@ async function readLogTail(kind, maxLines) {
  */
 export function startDashboardServer(
   port,
-  { getCommandsMenu = () => ({ categories: [], audios: [], birthdays: [] }), deleteAudio = () => ({ ok: false, error: 'indisponível' }) } = {},
+  {
+    getCommandsMenu = () => ({ categories: [], audios: [], birthdays: [] }),
+    deleteAudio = () => ({ ok: false, error: 'indisponível' }),
+    announceEvent = async () => {},
+  } = {},
 ) {
   const server = http.createServer((req, res) => {
     const ip = req.socket.remoteAddress || 'unknown';
@@ -2364,19 +2368,22 @@ export function startDashboardServer(
             : null,
         }));
       sendJson(res, 200, { me: me ? { name: formatDisplayName(me.name) } : null, events });
-    } else if (req.url === '/api/admin/events' && req.method === 'POST') {
-      if (!isAdmin(req)) return sendJson(res, 403, { ok: false, error: 'só o administrador pode fazer isso' });
+    } else if (req.url === '/api/events/create' && req.method === 'POST') {
+      // Qualquer pessoa com acesso ao painel (login ja exigido acima) pode criar evento.
       if (!isPanelRequest(req)) return sendJson(res, 403, { ok: false, error: 'requisição inválida' });
+      const session = getSession(req);
       readJsonBody(req, (err, data) => {
         if (err || !data || typeof data !== 'object') return sendJson(res, 400, { ok: false, error: 'pedido inválido' });
         const result = validateNewEvent(data);
         if (result.error) return sendJson(res, 400, { ok: false, error: result.error });
         addEvent(result.event);
-        console.log(`[painel] evento criado: "${result.event.title}" (${result.event.date})`);
+        const createdBy = session?.role === 'member' ? formatDisplayName(session.name) : null;
+        console.log(`[painel] evento criado${createdBy ? ' por ' + createdBy : ''}: "${result.event.title}" (${result.event.date})`);
+        // Avisa no WhatsApp; se o aviso falhar, o evento ja foi criado.
+        Promise.resolve(announceEvent(result.event, createdBy)).catch((e) => console.error('Erro ao avisar evento novo no grupo:', e));
         sendJson(res, 200, { ok: true });
       });
-    } else if (req.url === '/api/admin/events/delete' && req.method === 'POST') {
-      if (!isAdmin(req)) return sendJson(res, 403, { ok: false, error: 'só o administrador pode fazer isso' });
+    } else if (req.url === '/api/events/delete' && req.method === 'POST') {
       if (!isPanelRequest(req)) return sendJson(res, 403, { ok: false, error: 'requisição inválida' });
       readJsonBody(req, (err, data) => {
         if (err || typeof data.title !== 'string') return sendJson(res, 400, { ok: false, error: 'pedido inválido' });
