@@ -31,7 +31,7 @@ import {
 } from './birthdays.js';
 import { getNextUnseenNews, getRecentHeadlines } from './news.js';
 import { pickMostImpactfulHeadline, editBotPhoto } from './groupPhoto.js';
-import { loadEvents, addEvent, findUpcomingEvents, addAttendee, addAbsentee } from './events.js';
+import { loadEvents, addEvent, eventTitleExists, findUpcomingEvents, addAttendee, addAbsentee } from './events.js';
 import { loadScheduledMessages, getDueMessages, markScheduledMessageSent } from './scheduled.js';
 import { loadRules, findMatchingRule } from './rules.js';
 import { answerDataQuestion } from './dataQuestions.js';
@@ -772,6 +772,10 @@ async function commandAddEvento({ sock, groupJid, args }) {
     return sock.sendMessage(groupJid, {
       text: 'Não consegui entender a data do evento. Use "Data: DD/MM/AA" (ex: Data: 03/10/26).\n\n' + usage,
     });
+  }
+
+  if (eventTitleExists(title)) {
+    return sock.sendMessage(groupJid, { text: `Já existe um evento chamado *${title}*. Use outro nome (o nome identifica o evento).` });
   }
 
   const event = {

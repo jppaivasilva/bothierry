@@ -12,7 +12,7 @@ import { birthdayPhotoPath, birthdayPhotoVersion, deleteBirthdayPhoto, memberPho
 import { BOT_PHOTO_PATH } from './groupPhoto.js';
 import { formatDisplayName } from './displayNames.js';
 import { getAvatarPath } from './avatars.js';
-import { loadEvents, addAttendee, addAbsentee } from './events.js';
+import { loadEvents, addEvent, deleteEvent, eventTitleExists, addAttendee, addAbsentee } from './events.js';
 
 // Usuario/senha do painel (HTTP Basic Auth) — agora que o painel ficou
 // exposto num IP publico (antes era so localhost), precisa de login pra
@@ -498,6 +498,8 @@ const DASHBOARD_HTML = `<!doctype html>
   .danger-btn:active, .action-btn:active { transform: scale(0.96); }
   .chip-del { border: none; background: none; color: #d70015; font-size: 14px; font-weight: 700; padding: 0 0 0 6px; cursor: pointer; }
   .log-box { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; line-height: 1.5; color: var(--text-primary); background: rgba(255,255,255,.55); border-radius: 12px; padding: 12px; max-height: 360px; overflow: auto; white-space: pre-wrap; word-break: break-all; margin-top: 12px; }
+  .ev-label { display: block; font-size: 12px; font-weight: 700; color: var(--text-secondary); margin: 10px 0 4px; text-transform: uppercase; letter-spacing: .03em; }
+  .ev-input { max-width: none !important; width: 100%; margin-bottom: 0 !important; box-sizing: border-box; }
   .rsvp-row { display: flex; gap: 8px; margin-top: 14px; }
   .rsvp-btn { flex: 1; font-family: inherit; font-size: 14px; font-weight: 700; padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(60,60,67,.14); background: rgba(255,255,255,.7); color: var(--text-primary); cursor: pointer; }
   .rsvp-btn:active { transform: scale(0.97); }
@@ -708,6 +710,7 @@ const DASHBOARD_HTML = `<!doctype html>
 
   <div id="tab-events" class="tab-panel">
   <div class="sub" id="eventsSub">Próximos eventos do grupo</div>
+  <button class="action-btn admin-only" id="newEventBtn" style="margin-bottom:16px;">➕ Criar evento</button>
   <div id="eventsGrid" class="menu-grid"></div>
   </div>
 
@@ -1724,12 +1727,84 @@ async function loadEvents() {
       '<div class="modal-section-label" style="margin-top:14px;">Confirmados (' + e.attendees.length + ')</div>' +
       '<div class="people-list">' + names(e.attendees) + '</div>' +
       '<div class="modal-section-label" style="margin-top:10px;">Ausentes (' + e.absentees.length + ')</div>' +
-      '<div class="people-list">' + names(e.absentees) + '</div>' + buttons + '</div>';
+      '<div class="people-list">' + names(e.absentees) + '</div>' + buttons +
+      '<button class="action-btn admin-only event-delete" data-idx="' + i + '" style="margin-top:12px;color:#d70015;">🗑️ Excluir evento</button></div>';
   }).join('');
   grid.dataset.titles = JSON.stringify(data.events.map((e) => e.title));
 }
 
+document.getElementById('newEventBtn').addEventListener('click', () => {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML =
+    '<div class="modal-card event-form" style="max-width:460px;">' +
+    '<button class="modal-close" type="button" id="evClose">✕</button>' +
+    '<div class="modal-header-name" style="margin-bottom:14px;">Criar evento</div>' +
+    '<label class="ev-label">Nome do evento *</label><input id="evTitle" class="member-search ev-input" maxlength="80" placeholder="Ex.: Churrasco de fim de ano" />' +
+    '<div style="display:flex;gap:10px;flex-wrap:wrap;">' +
+    '<div style="flex:1;min-width:150px;"><label class="ev-label">Data *</label><input id="evDate" type="date" class="member-search ev-input" /></div>' +
+    '<div style="flex:1;min-width:130px;"><label class="ev-label">Horário</label><input id="evTime" type="time" class="member-search ev-input" /></div></div>' +
+    '<label class="ev-label">Local</label><input id="evPlace" class="member-search ev-input" maxlength="100" placeholder="Ex.: Casa do Thierry" />' +
+    '<label class="ev-label">Detalhes extras (um por linha, "Rótulo: valor")</label>' +
+    '<textarea id="evExtra" class="member-search ev-input" rows="3" placeholder="Bebida: cada um leva a sua"></textarea>' +
+    '<div id="evMsg" class="menu-desc" style="margin:6px 0;color:#d70015;"></div>' +
+    '<button class="action-btn" id="evSave" style="width:100%;padding:12px;font-size:15px;background:#007aff;color:#fff;border-color:#007aff;">Criar evento</button></div>';
+  document.body.appendChild(overlay);
+  overlay.querySelector('#evClose').addEventListener('click', () => overlay.remove());
+  overlay.addEventListener('input', () => { overlay.querySelector('#evMsg').textContent = ''; });
+  overlay.querySelector('#evSave').addEventListener('click', async () => {
+    const msg = overlay.querySelector('#evMsg');
+    const time = overlay.querySelector('#evTime').value; // "13:30" -> "13h30"
+    const timeText = time ? Number(time.slice(0, 2)) + 'h' + (time.slice(3) === '00' ? '' : time.slice(3)) : '';
+    const extra = {};
+    overlay.querySelector('#evExtra').value.split(String.fromCharCode(10)).forEach((line) => {
+      const i = line.indexOf(':');
+      if (i > 0 && line.slice(i + 1).trim()) extra[line.slice(0, i).trim()] = line.slice(i + 1).trim();
+    });
+    msg.textContent = '';
+    try {
+      const res = await fetch('/api/admin/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'panel' },
+        body: JSON.stringify({
+          title: overlay.querySelector('#evTitle').value,
+          date: overlay.querySelector('#evDate').value,
+          time: timeText,
+          location: overlay.querySelector('#evPlace').value,
+          extra,
+        }),
+      });
+      const data = await res.json();
+      if (!data.ok) { msg.textContent = data.error || 'erro'; return; }
+      overlay.remove();
+      await loadEvents();
+    } catch {
+      msg.textContent = 'Não consegui falar com o bot. Tenta de novo.';
+    }
+  });
+});
+
 document.getElementById('eventsGrid').addEventListener('click', async (e) => {
+  const del = e.target.closest('.event-delete');
+  if (del) {
+    const titles = JSON.parse(document.getElementById('eventsGrid').dataset.titles || '[]');
+    const title = titles[Number(del.dataset.idx)];
+    if (!confirm('Excluir o evento "' + title + '"? A lista de confirmados dele também some.')) return;
+    try {
+      const res = await fetch('/api/admin/events/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'panel' },
+        body: JSON.stringify({ title }),
+      });
+      const data = await res.json();
+      if (!data.ok) { alert('Não deu: ' + (data.error || 'erro')); return; }
+      await loadEvents();
+    } catch {
+      alert('Não consegui falar com o bot. Tenta de novo.');
+    }
+    return;
+  }
   const btn = e.target.closest('.rsvp-btn');
   if (!btn) return;
   const titles = JSON.parse(document.getElementById('eventsGrid').dataset.titles || '[]');
@@ -2019,6 +2094,37 @@ function renderEntrarPage({ title, message, token }) {
   return renderLoginPage(false).replace(/<div class="login-card">[\s\S]*<\/div>\s*<\/body>/, () => card + '\n</body>');
 }
 
+// Valida os dados de um evento novo vindo do formulario do painel (admin).
+// Retorna { event } ou { error }. Mesmo formato do !addevento do WhatsApp.
+function validateNewEvent(data) {
+  const text = (v, max) => (typeof v === 'string' ? v.trim().replace(/\s+/g, ' ').slice(0, max) : '');
+  const title = text(data.title, 80);
+  if (title.length < 2) return { error: 'dê um nome ao evento' };
+  if (eventTitleExists(title)) return { error: 'já existe um evento com esse nome (o nome identifica o evento)' };
+  const date = typeof data.date === 'string' ? data.date.trim() : '';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(`${date}T12:00:00Z`)) || new Date(`${date}T12:00:00Z`).toISOString().slice(0, 10) !== date) {
+    return { error: 'data inválida' };
+  }
+  if (date < getBrasiliaToday()) return { error: 'essa data já passou' };
+  const extra = {};
+  if (data.extra && typeof data.extra === 'object') {
+    for (const [label, value] of Object.entries(data.extra).slice(0, 10)) {
+      const l = text(label, 30);
+      const v = text(value, 100);
+      if (l && v) extra[l] = v;
+    }
+  }
+  return {
+    event: {
+      title,
+      date,
+      location: text(data.location, 100) || '(local não informado)',
+      time: text(data.time, 20) || '(horário não informado)',
+      extra,
+    },
+  };
+}
+
 // Acoes de administracao do painel (apagar audio, reiniciar, ver logs) — so
 // aceitas via POST/GET com o cabecalho X-Requested-With (o fetch do proprio
 // painel manda; um formulario/imagem de outro site nao consegue), alem do
@@ -2258,6 +2364,26 @@ export function startDashboardServer(
             : null,
         }));
       sendJson(res, 200, { me: me ? { name: formatDisplayName(me.name) } : null, events });
+    } else if (req.url === '/api/admin/events' && req.method === 'POST') {
+      if (!isAdmin(req)) return sendJson(res, 403, { ok: false, error: 'só o administrador pode fazer isso' });
+      if (!isPanelRequest(req)) return sendJson(res, 403, { ok: false, error: 'requisição inválida' });
+      readJsonBody(req, (err, data) => {
+        if (err || !data || typeof data !== 'object') return sendJson(res, 400, { ok: false, error: 'pedido inválido' });
+        const result = validateNewEvent(data);
+        if (result.error) return sendJson(res, 400, { ok: false, error: result.error });
+        addEvent(result.event);
+        console.log(`[painel] evento criado: "${result.event.title}" (${result.event.date})`);
+        sendJson(res, 200, { ok: true });
+      });
+    } else if (req.url === '/api/admin/events/delete' && req.method === 'POST') {
+      if (!isAdmin(req)) return sendJson(res, 403, { ok: false, error: 'só o administrador pode fazer isso' });
+      if (!isPanelRequest(req)) return sendJson(res, 403, { ok: false, error: 'requisição inválida' });
+      readJsonBody(req, (err, data) => {
+        if (err || typeof data.title !== 'string') return sendJson(res, 400, { ok: false, error: 'pedido inválido' });
+        if (!deleteEvent(data.title)) return sendJson(res, 404, { ok: false, error: 'evento não encontrado' });
+        console.log(`[painel] evento apagado: "${data.title}"`);
+        sendJson(res, 200, { ok: true });
+      });
     } else if (req.url === '/api/events/rsvp' && req.method === 'POST') {
       const session = getSession(req);
       if (session?.role !== 'member') return sendJson(res, 403, { ok: false, error: 'entre pelo link do !painel pra marcar presença' });

@@ -35,6 +35,21 @@ export function addEvent(event) {
   return event;
 }
 
+/** Ja existe um evento com esse titulo (sem diferenciar acento/maiuscula)? O titulo e a chave do evento. */
+export function eventTitleExists(title) {
+  const target = normalize(title.trim());
+  return loadEvents().some((e) => normalize(e.title.trim()) === target);
+}
+
+/** Apaga o evento (titulo exato). Retorna true se apagou. */
+export function deleteEvent(title) {
+  const events = loadEvents();
+  const next = events.filter((e) => e.title !== title);
+  if (next.length === events.length) return false;
+  saveEvents(next);
+  return true;
+}
+
 function normalize(str) {
   return str.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 }
