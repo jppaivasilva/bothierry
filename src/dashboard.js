@@ -5,6 +5,8 @@ import os from 'os';
 import path from 'path';
 import { getDashboardData, getMessagesPerHourForDate, getSystemStats, getSystemStatsHistory } from './metrics.js';
 import { getCountsBetween, getMainGroupJid, getMessageTrend, getActivityHeatmap, getTopSenderPerHour, getMemberList, getMemberStats } from './db.js';
+import { loadBirthdays } from './birthdays.js';
+import { resolveBirthdayMember, setBirthdayLink, normalizeName } from './birthdayLinks.js';
 import { BOT_PHOTO_PATH } from './groupPhoto.js';
 import { formatDisplayName } from './displayNames.js';
 import { getAvatarPath } from './avatars.js';
@@ -433,6 +435,15 @@ const DASHBOARD_HTML = `<!doctype html>
   .rsvp-btn.on-going { background: #34c759; border-color: #34c759; color: #fff; }
   .rsvp-btn.on-not { background: #ff3b30; border-color: #ff3b30; color: #fff; }
   .people-list { font-size: 13px; color: var(--text-primary); margin-top: 6px; }
+  .bday-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid rgba(60,60,67,.08); flex-wrap: wrap; }
+  .bday-row:first-child { border-top: none; }
+  .bday-row .who { flex: 1; min-width: 150px; font-size: 14px; font-weight: 600; }
+  .bday-row .who small { display: block; font-size: 11px; font-weight: 500; color: var(--text-secondary); }
+  .bday-row select { font-family: inherit; font-size: 13px; padding: 7px 8px; border-radius: 10px; border: 1px solid rgba(60,60,67,.18); background: rgba(255,255,255,.8); max-width: 100%; }
+  .bday-row .tag { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+  .tag-manual { background: rgba(0,122,255,.14); color: var(--accent-blue); }
+  .tag-auto { background: rgba(52,199,89,.16); color: #1f8f3d; }
+  .tag-none { background: rgba(255,59,48,.12); color: #d70015; }
   .menu-chips { display: flex; flex-wrap: wrap; gap: 6px; }
   .member-search { width: 100%; max-width: 320px; font-size: 14px; font-family: inherit; padding: 10px 14px; border-radius: 12px; border: 1px solid rgba(60,60,67,.14); background: rgba(255,255,255,.7); color: var(--text-primary); outline: none; margin-bottom: 20px; transition: border-color .15s var(--ease-out), box-shadow .15s var(--ease-out); }
   .member-search:focus { border-color: var(--accent-blue); box-shadow: 0 0 0 4px rgba(0,122,255,.14); }
@@ -690,6 +701,11 @@ const DASHBOARD_HTML = `<!doctype html>
       <button class="action-btn" id="logRefresh">Atualizar</button>
     </div>
     <div class="log-box" id="logBox">Clique em Atualizar.</div>
+  </div>
+  <div class="chart-box admin-only" style="margin-top:16px;">
+    <div class="section-head">Aniversariantes e fotos</div>
+    <div class="menu-desc" style="margin:0 0 12px;">Escolha qual membro é cada aniversariante, pra foto dele sair no cartão de aniversário. "Automático" usa o nome (só quando bate com uma pessoa só).</div>
+    <div id="bdayLinks">Carregando...</div>
   </div>
   </div>
 
@@ -1291,7 +1307,7 @@ function closeMemberModal() {
 // Papel de quem esta logado — admin ve os botoes de apagar/reiniciar/logs
 // (o servidor tambem barra essas rotas pra quem nao e admin).
 fetch('/api/me').then((r) => r.json()).then((me) => {
-  if (me.role === 'admin') document.body.classList.add('is-admin');
+  if (me.role === 'admin') { document.body.classList.add('is-admin'); loadBdayAdmin(); }
   // Quem entrou pelo link do !painel veio pra marcar presenca: ja abre em Eventos.
   if (me.role === 'member') document.querySelector('button[data-tab=events]').click();
 }).catch(() => {});
@@ -1434,6 +1450,49 @@ document.getElementById('restartBtn').addEventListener('click', async () => {
     setTimeout(() => location.reload(), 15000);
   } catch {
     msg.textContent = 'Não consegui falar com o bot.';
+  }
+});
+
+async function loadBdayAdmin() {
+  const box = document.getElementById('bdayLinks');
+  try {
+    const res = await fetch('/api/admin/birthday-links', { headers: { 'X-Requested-With': 'panel' } });
+    if (!res.ok) { box.textContent = 'Não consegui carregar.'; return; }
+    const data = await res.json();
+    const pad = (n) => String(n).padStart(2, '0');
+    box.innerHTML = data.birthdays.map((b, i) => {
+      const tag = b.source === 'manual' ? '<span class="tag tag-manual">manual</span>'
+        : b.source === 'auto' ? '<span class="tag tag-auto">automático</span>'
+        : '<span class="tag tag-none">sem foto</span>';
+      const options = '<option value="">(automático)</option>' + data.members.map((m) =>
+        '<option value="' + escapeHtml(m.jid) + '"' + (b.source === 'manual' && b.jid === m.jid ? ' selected' : '') + '>' + escapeHtml(m.name) + '</option>'
+      ).join('');
+      const photo = b.jid ? avatarImg(b.jid, b.name, 'avatar-mini') : '';
+      return '<div class="bday-row">' + photo +
+        '<div class="who">' + escapeHtml(b.name) + '<small>' + pad(b.day) + '/' + pad(b.month) + '</small></div>' + tag +
+        '<select data-idx="' + i + '">' + options + '</select></div>';
+    }).join('');
+    box.dataset.names = JSON.stringify(data.birthdays.map((b) => b.name));
+  } catch {
+    box.textContent = 'Não consegui carregar.';
+  }
+}
+
+document.getElementById('bdayLinks').addEventListener('change', async (e) => {
+  const sel = e.target.closest('select');
+  if (!sel) return;
+  const names = JSON.parse(document.getElementById('bdayLinks').dataset.names || '[]');
+  try {
+    const res = await fetch('/api/admin/birthday-links', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'panel' },
+      body: JSON.stringify({ name: names[Number(sel.dataset.idx)], jid: sel.value || null }),
+    });
+    const data = await res.json();
+    if (!data.ok) alert('Não salvou: ' + (data.error || 'erro'));
+    await loadBdayAdmin();
+  } catch {
+    alert('Não consegui falar com o bot. Tenta de novo.');
   }
 });
 
@@ -2024,6 +2083,36 @@ export function startDashboardServer(
       readLogTail(kind, lines)
         .then((list) => sendJson(res, 200, { lines: list }))
         .catch((e) => sendJson(res, 500, { lines: [], error: e.code === 'ENOENT' ? 'arquivo de log não encontrado' : 'não consegui ler o log' }));
+    } else if (req.url === '/api/admin/birthday-links' && req.method === 'GET') {
+      if (!isAdmin(req)) return sendJson(res, 403, { error: 'só o administrador pode ver isso' });
+      const groupJid = getMainGroupJid();
+      const members = groupJid ? getMemberList(groupJid) : [];
+      const birthdays = [...loadBirthdays()]
+        .sort((a, b) => a.month - b.month || a.day - b.day)
+        .map((b) => {
+          const match = resolveBirthdayMember(b, members);
+          return { name: b.name, day: b.day, month: b.month, jid: match?.jid || null, source: match?.source || null };
+        });
+      sendJson(res, 200, {
+        birthdays,
+        members: members.map((m) => ({ jid: m.jid, name: formatDisplayName(m.name) })).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')),
+      });
+    } else if (req.url === '/api/admin/birthday-links' && req.method === 'POST') {
+      if (!isAdmin(req)) return sendJson(res, 403, { ok: false, error: 'só o administrador pode fazer isso' });
+      if (!isPanelRequest(req)) return sendJson(res, 403, { ok: false, error: 'requisição inválida' });
+      readJsonBody(req, (err, data) => {
+        if (err || typeof data.name !== 'string' || (data.jid !== null && typeof data.jid !== 'string')) {
+          return sendJson(res, 400, { ok: false, error: 'pedido inválido' });
+        }
+        const exists = loadBirthdays().some((b) => normalizeName(b.name) === normalizeName(data.name));
+        if (!exists) return sendJson(res, 404, { ok: false, error: 'aniversariante não encontrado' });
+        const groupJid = getMainGroupJid();
+        const members = groupJid ? getMemberList(groupJid) : [];
+        if (data.jid && !members.some((m) => m.jid === data.jid)) return sendJson(res, 400, { ok: false, error: 'membro não encontrado' });
+        setBirthdayLink(data.name, data.jid || null);
+        console.log(`[painel] ligação do aniversariante "${data.name}": ${data.jid || 'automático'}`);
+        sendJson(res, 200, { ok: true });
+      });
     } else if (req.url === '/api/commands') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(getCommandsMenu()));
