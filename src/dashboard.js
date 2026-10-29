@@ -15,6 +15,12 @@ import { getAvatarPath } from './avatars.js';
 const DASHBOARD_USER = process.env.DASHBOARD_USER || 'admin';
 const DASHBOARD_PASS = process.env.DASHBOARD_PASS || '';
 
+// Usuario administrador (ve tambem as opcoes de apagar audio, reiniciar o bot e
+// ver logs). A senha vem SO do .env da VM (nunca do codigo — o repositorio e
+// publico); sem ADMIN_PASS configurada, ninguem consegue entrar como admin.
+const ADMIN_USER = process.env.ADMIN_USER || 'root';
+const ADMIN_PASS = process.env.ADMIN_PASS || '';
+
 // Compara usuario/senha em tempo constante (evita timing attack) — so
 // funciona se os dois buffers tiverem o mesmo tamanho, por isso o padding.
 function safeEqual(a, b) {
@@ -51,13 +57,18 @@ function recordFailedLogin(ip) {
 const SESSION_COOKIE_NAME = 'bothierry_session';
 const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 dias
 
-function signSession(expiry) {
-  return crypto.createHmac('sha256', `${DASHBOARD_USER}:${DASHBOARD_PASS}`).update(String(expiry)).digest('hex');
+function signSession(payload) {
+  return crypto
+    .createHmac('sha256', `${DASHBOARD_USER}:${DASHBOARD_PASS}:${ADMIN_USER}:${ADMIN_PASS}`)
+    .update(payload)
+    .digest('hex');
 }
 
-function makeSessionCookieValue() {
-  const expiry = Date.now() + SESSION_MAX_AGE_MS;
-  return `${expiry}.${signSession(expiry)}`;
+// Cookie: "<validade>.<papel>.<assinatura>", papel = viewer | admin. O papel
+// vai dentro do que e assinado, entao nao da pra trocar viewer por admin na mao.
+function makeSessionCookieValue(role) {
+  const payload = `${Date.now() + SESSION_MAX_AGE_MS}.${role}`;
+  return `${payload}.${signSession(payload)}`;
 }
 
 function parseCookies(req) {
@@ -102,16 +113,26 @@ async function serveCachedImage(filePath, contentType, res) {
   }
 }
 
+// Papel da sessao do cookie ('viewer' | 'admin'), ou null se nao tem sessao valida.
+function getSessionRole(req) {
+  const value = parseCookies(req)[SESSION_COOKIE_NAME];
+  if (!value) return null;
+  const parts = value.split('.');
+  if (parts.length !== 3) return null;
+  const [expiryStr, role, sig] = parts;
+  const expiry = Number(expiryStr);
+  if (!expiry || Date.now() > expiry) return null;
+  if (role !== 'viewer' && role !== 'admin') return null;
+  return safeEqual(sig, signSession(`${expiryStr}.${role}`)) ? role : null;
+}
+
 function isAuthorized(req) {
   if (!DASHBOARD_PASS) return true; // sem senha configurada, nao bloqueia (fallback pro comportamento antigo)
-  const value = parseCookies(req)[SESSION_COOKIE_NAME];
-  if (!value) return false;
-  const dotIdx = value.indexOf('.');
-  if (dotIdx === -1) return false;
-  const expiry = Number(value.slice(0, dotIdx));
-  const sig = value.slice(dotIdx + 1);
-  if (!expiry || Date.now() > expiry) return false;
-  return safeEqual(sig, signSession(expiry));
+  return getSessionRole(req) !== null;
+}
+
+function isAdmin(req) {
+  return getSessionRole(req) === 'admin';
 }
 
 // Grupo cujo ranking 08h-18h o painel mostra — mesmo grupo usado pela foto
@@ -376,6 +397,8 @@ const DASHBOARD_HTML = `<!doctype html>
   .menu-desc { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
   .menu-birthday { display: flex; gap: 10px; align-items: baseline; padding: 5px 0; font-size: 13px; color: var(--text-primary); }
   .menu-date { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; font-weight: 700; color: var(--text-secondary); min-width: 38px; }
+  .admin-only { display: none !important; }
+  body.is-admin .admin-only { display: revert !important; }
   .danger-btn, .action-btn { font-family: inherit; font-size: 13px; font-weight: 600; padding: 8px 14px; border-radius: 12px; border: 1px solid rgba(60,60,67,.14); background: rgba(255,255,255,.7); color: var(--text-primary); cursor: pointer; }
   .danger-btn { color: #d70015; border-color: rgba(215,0,21,.25); }
   .danger-btn:active, .action-btn:active { transform: scale(0.96); }
@@ -615,7 +638,7 @@ const DASHBOARD_HTML = `<!doctype html>
       </table>
     </div>
   </div>
-  <div class="chart-box" style="margin-top:16px;">
+  <div class="chart-box admin-only" style="margin-top:16px;">
     <div class="section-head">Ações</div>
     <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
       <button class="danger-btn" id="restartBtn">Reiniciar bot</button>
@@ -1213,6 +1236,12 @@ function closeMemberModal() {
   document.querySelectorAll('.modal-overlay').forEach((el) => el.remove());
 }
 
+// Papel de quem esta logado — admin ve os botoes de apagar/reiniciar/logs
+// (o servidor tambem barra essas rotas pra quem nao e admin).
+fetch('/api/me').then((r) => r.json()).then((me) => {
+  if (me.role === 'admin') document.body.classList.add('is-admin');
+}).catch(() => {});
+
 let menuData = null;
 
 async function loadMenu() {
@@ -1240,7 +1269,7 @@ function renderMenu(query) {
           '<div class="modal-section-label" style="margin-top:14px;">Áudios salvos (mande !nome pra tocar)</div>' +
           '<div class="menu-chips">' + audios.map((a) =>
             '<span class="menu-cmd">!' + escapeHtml(a) +
-            (a === 'repetido' ? '' : '<button class="chip-del" data-audio="' + escapeHtml(a) + '" title="Apagar">✕</button>') +
+            (a === 'repetido' ? '' : '<button class="chip-del admin-only" data-audio="' + escapeHtml(a) + '" title="Apagar">✕</button>') +
             '</span>'
           ).join('') + '</div>';
       }
@@ -1628,9 +1657,11 @@ export function startDashboardServer(
         const params = new URLSearchParams(body);
         const user = params.get('user') || '';
         const pass = params.get('pass') || '';
-        if (safeEqual(user, DASHBOARD_USER) && safeEqual(pass, DASHBOARD_PASS)) {
+        const isAdminLogin = ADMIN_PASS !== '' && safeEqual(user, ADMIN_USER) && safeEqual(pass, ADMIN_PASS);
+        const isViewerLogin = safeEqual(user, DASHBOARD_USER) && safeEqual(pass, DASHBOARD_PASS);
+        if (isAdminLogin || isViewerLogin) {
           res.writeHead(302, {
-            'Set-Cookie': `${SESSION_COOKIE_NAME}=${makeSessionCookieValue()}; HttpOnly; Path=/; Max-Age=${Math.floor(SESSION_MAX_AGE_MS / 1000)}; SameSite=Lax`,
+            'Set-Cookie': `${SESSION_COOKIE_NAME}=${makeSessionCookieValue(isAdminLogin ? 'admin' : 'viewer')}; HttpOnly; Path=/; Max-Age=${Math.floor(SESSION_MAX_AGE_MS / 1000)}; SameSite=Lax`,
             Location: '/',
           });
           res.end();
@@ -1692,7 +1723,10 @@ export function startDashboardServer(
       trend.series = trend.series.map((s) => ({ ...s, name: formatDisplayName(s.name) }));
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(trend));
+    } else if (req.url === '/api/me') {
+      sendJson(res, 200, { role: isAdmin(req) ? 'admin' : 'viewer' });
     } else if (req.url === '/api/audios/delete' && req.method === 'POST') {
+      if (!isAdmin(req)) return sendJson(res, 403, { ok: false, error: 'só o administrador pode fazer isso' });
       if (!isPanelRequest(req)) return sendJson(res, 403, { ok: false, error: 'requisição inválida' });
       readJsonBody(req, (err, data) => {
         if (err || typeof data.name !== 'string') return sendJson(res, 400, { ok: false, error: 'pedido inválido' });
@@ -1701,6 +1735,7 @@ export function startDashboardServer(
         sendJson(res, result.ok ? 200 : 400, result);
       });
     } else if (req.url === '/api/restart' && req.method === 'POST') {
+      if (!isAdmin(req)) return sendJson(res, 403, { ok: false, error: 'só o administrador pode fazer isso' });
       if (!isPanelRequest(req)) return sendJson(res, 403, { ok: false, error: 'requisição inválida' });
       // So reinicia se estiver rodando sob o PM2 (que sobe o processo de novo);
       // fora dele, sair derrubaria o bot de vez.
@@ -1709,6 +1744,7 @@ export function startDashboardServer(
       sendJson(res, 200, { ok: true });
       setTimeout(() => process.exit(0), 500);
     } else if (req.url.startsWith('/api/logs')) {
+      if (!isAdmin(req)) return sendJson(res, 403, { lines: [], error: 'só o administrador pode ver os logs' });
       const url = new URL(req.url, 'http://localhost');
       const kind = url.searchParams.get('kind') === 'error' ? 'error' : 'out';
       const lines = Math.min(Math.max(Number(url.searchParams.get('lines')) || 100, 10), 300);
