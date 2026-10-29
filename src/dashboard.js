@@ -4,7 +4,7 @@ import crypto from 'crypto';
 import os from 'os';
 import path from 'path';
 import { getDashboardData, getMessagesPerHourForDate, getSystemStats, getSystemStatsHistory } from './metrics.js';
-import { getCountsBetween, getGroupJidByName, getMessageTrend, getActivityHeatmap, getTopSenderPerHour, getMemberList, getMemberStats } from './db.js';
+import { getCountsBetween, getMainGroupJid, getMessageTrend, getActivityHeatmap, getTopSenderPerHour, getMemberList, getMemberStats } from './db.js';
 import { BOT_PHOTO_PATH } from './groupPhoto.js';
 import { formatDisplayName } from './displayNames.js';
 import { getAvatarPath } from './avatars.js';
@@ -147,10 +147,6 @@ function isAdmin(req) {
   return getSession(req)?.role === 'admin';
 }
 
-// Grupo cujo ranking 08h-18h o painel mostra — mesmo grupo usado pela foto
-// tematica do bot (a unica "real" que o bot acompanha hoje).
-const RANKING_GROUP_NAME = 'FISCAIS™️';
-
 // Converte uma data (YYYY-MM-DD, fuso de Brasilia) + hora local num timestamp
 // unix. Brasil nao tem horario de verao desde 2019, entao o offset fixo -03:00 e seguro.
 function timestampBR(dateStr, hour) {
@@ -164,12 +160,12 @@ function getBrasiliaToday() {
 
 /**
  * Ranking de mensagens de hoje entre duas horas (horario de Brasilia), do
- * grupo RANKING_GROUP_NAME — mesma logica do !ranking/relatorio, exposta pro
+ * grupo principal (o mais ativo) — mesma logica do !ranking/relatorio, exposta pro
  * painel poder mostrar isso ao vivo. hourUntil pode ser 24 (meia-noite do dia
  * seguinte) pra cobrir o dia inteiro.
  */
 function getTodayRanking(hourSince, hourUntil, date) {
-  const groupJid = getGroupJidByName(RANKING_GROUP_NAME);
+  const groupJid = getMainGroupJid();
   const today = date || getBrasiliaToday();
   if (!groupJid) return { date: today, total: 0, ranking: [] };
 
@@ -1876,7 +1872,7 @@ export function startDashboardServer(
     } else if (req.url.startsWith('/api/messages-per-hour')) {
       const url = new URL(req.url, 'http://localhost');
       const date = url.searchParams.get('date') || new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
-      const groupJid = getGroupJidByName(RANKING_GROUP_NAME);
+      const groupJid = getMainGroupJid();
       const topSenderPerHour = groupJid ? getTopSenderPerHour(groupJid, date) : {};
       // Formata o nome de exibicao aqui (camada de apresentacao), sem mexer
       // no sender_name bruto guardado no historico.
@@ -1897,7 +1893,7 @@ export function startDashboardServer(
     } else if (req.url.startsWith('/api/trend')) {
       const url = new URL(req.url, 'http://localhost');
       const days = Math.min(Math.max(Number(url.searchParams.get('days')) || 14, 1), 90);
-      const groupJid = getGroupJidByName(RANKING_GROUP_NAME);
+      const groupJid = getMainGroupJid();
       const trend = groupJid ? getMessageTrend(groupJid, days) : { dates: [], series: [] };
       trend.series = trend.series.map((s) => ({ ...s, name: formatDisplayName(s.name) }));
       res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -1970,11 +1966,11 @@ export function startDashboardServer(
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(getCommandsMenu()));
     } else if (req.url === '/api/heatmap') {
-      const groupJid = getGroupJidByName(RANKING_GROUP_NAME);
+      const groupJid = getMainGroupJid();
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(groupJid ? getActivityHeatmap(groupJid) : { weekdayNames: [], matrix: [] }));
     } else if (req.url === '/api/members') {
-      const groupJid = getGroupJidByName(RANKING_GROUP_NAME);
+      const groupJid = getMainGroupJid();
       const members = groupJid ? getMemberList(groupJid) : [];
       members.forEach((m) => { m.name = formatDisplayName(m.name); });
       // Ranking de hoje: mais mensagens primeiro; empates (inclusive os com 0, que
@@ -1985,7 +1981,7 @@ export function startDashboardServer(
     } else if (req.url.startsWith('/api/member')) {
       const url = new URL(req.url, 'http://localhost');
       const jid = url.searchParams.get('jid');
-      const groupJid = getGroupJidByName(RANKING_GROUP_NAME);
+      const groupJid = getMainGroupJid();
       const stats = groupJid && jid ? getMemberStats(groupJid, jid) : null;
       if (!stats) {
         res.writeHead(404, { 'Content-Type': 'application/json' });

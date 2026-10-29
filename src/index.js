@@ -17,7 +17,7 @@ async function getSharp() {
   if (!sharpModule) sharpModule = (await import('sharp')).default;
   return sharpModule;
 }
-import { logMessage, getDailyCounts, getCountsSince, getCountsBetween, getMessagesSince, extractUrls, wasUrlSentSince, loadSeenMessageIds, archiveOldMessages, getRecentSenderJids, getGroupJidByName } from './db.js';
+import { logMessage, getDailyCounts, getCountsSince, getCountsBetween, getMessagesSince, extractUrls, wasUrlSentSince, loadSeenMessageIds, archiveOldMessages, getRecentSenderJids, getMainGroupJid } from './db.js';
 import { syncAvatars } from './avatars.js';
 import {
   loadBirthdays,
@@ -99,7 +99,6 @@ const AD_DAYS = '*';
 // quando a foto tematica com a noticia mais importante nacionalmente e trocada.
 // Hoje: segunda e quarta as 08h (horario de Brasilia) — 2x por semana, pra
 // economizar no custo do gpt-image-1 (o item mais caro do bot de longe).
-const GROUP_PHOTO_TARGET_NAME = 'FISCAIS™️';
 const GROUP_PHOTO_CRON = '0 8 * * 1,3';
 
 // Janela de tempo em que um link repetido e avisado pelo bot.
@@ -1181,10 +1180,14 @@ async function sendEndOfDayMessage(sock) {
 
 // Acha o JID de um grupo pelo nome (subject) — Baileys so indexa grupos por
 // JID, entao e preciso listar todos os grupos que o bot participa e comparar.
-async function findGroupJidByName(sock, name) {
+// Acha o grupo "principal" do bot SEM depender do nome (que muda com frequencia):
+// se o bot esta em um grupo so, e ele; se em varios, o mais ativo nos ultimos 7 dias.
+async function findMainGroupJid(sock) {
   const participating = await sock.groupFetchAllParticipating();
-  const entry = Object.entries(participating).find(([, meta]) => meta.subject === name);
-  return entry ? entry[0] : null;
+  const jids = Object.keys(participating);
+  if (jids.length === 1) return jids[0];
+  const active = getMainGroupJid();
+  return active && jids.includes(active) ? active : null;
 }
 
 // Data da eleicao (1o turno 2026) em que a apuracao ao vivo deve rodar —
@@ -1230,9 +1233,9 @@ async function sendElectionUpdate(sock, { force = false } = {}) {
   const hourNow = Number(time.split(':')[0]);
   if (!force && (today !== ELECTION_DATE || hourNow < ELECTION_RESULTS_START_HOUR || isElectionFinalized())) return;
 
-  const groupJid = await findGroupJidByName(sock, GROUP_PHOTO_TARGET_NAME);
+  const groupJid = await findMainGroupJid(sock);
   if (!groupJid) {
-    console.error(`[eleicoes] Grupo "${GROUP_PHOTO_TARGET_NAME}" nao encontrado entre os grupos que o bot participa.`);
+    console.error('[eleicoes] Grupo principal nao encontrado entre os grupos que o bot participa.');
     return;
   }
 
@@ -1312,7 +1315,7 @@ function findElectionWinnerPersona(winnerName) {
  * Manda a mensagem de resultado final ("fulano foi eleito presidente") e
  * renomeia o grupo pra "DEU FLAVIO"/"DEU LULA", assim que a apuracao fecha em
  * 100%. Registra o nome original como "pending rename" (mesmo mecanismo do
- * tema de aniversario) pra voltar sozinho pro nome padrao (FISCAIS™️) na
+ * tema de aniversario) pra voltar sozinho pro nome que o grupo tinha antes na
  * proxima meia-noite, via revertPendingGroupRenames (cron '1 0 * * *').
  */
 async function announceElectionWinner(sock, groupJid, winnerName) {
@@ -1331,13 +1334,17 @@ async function announceElectionWinner(sock, groupJid, winnerName) {
   }
 
   try {
+    // Guarda o nome ATUAL do grupo (ele muda com frequencia) pra voltar pra ele
+    // na meia-noite; se ja existe uma reversao pendente (ex: tema de aniversario),
+    // mantem o nome original que ja estava guardado.
+    const pending = getPendingGroupRenames();
+    const originalName = pending[groupJid] || (await sock.groupMetadata(groupJid)).subject;
     await sock.groupUpdateSubject(groupJid, match.groupName);
     console.log(`[eleicoes] Grupo renomeado para "${match.groupName}".`);
 
-    const pending = getPendingGroupRenames();
-    pending[groupJid] = GROUP_PHOTO_TARGET_NAME;
+    pending[groupJid] = originalName;
     setPendingGroupRenames(pending);
-    console.log(`[eleicoes] Reversao pra "${GROUP_PHOTO_TARGET_NAME}" agendada pra meia-noite.`);
+    console.log(`[eleicoes] Reversao pra "${originalName}" agendada pra meia-noite.`);
   } catch (err) {
     console.error('[eleicoes] Erro ao renomear o grupo com o resultado final:', err);
   }
@@ -1373,7 +1380,7 @@ async function updateGroupPhotoWithElectionWinner(sock, groupJid, winnerName) {
 
 /**
  * Escolhe, entre as manchetes recentes do G1, a noticia mais importante nacionalmente do
- * dia (via IA) e troca a foto do grupo GROUP_PHOTO_TARGET_NAME por uma edicao
+ * dia (via IA) e troca a foto do grupo principal por uma edicao
  * tematica da foto-base do bot (assets/bot-photo.png), incorporando o tema
  * visual da noticia. So mexe nesse grupo especifico — nenhum outro grupo tem
  * a foto alterada por essa rotina.
@@ -1385,9 +1392,9 @@ async function updateGroupPhotoWithNews(sock) {
     return;
   }
 
-  const groupJid = await findGroupJidByName(sock, GROUP_PHOTO_TARGET_NAME);
+  const groupJid = await findMainGroupJid(sock);
   if (!groupJid) {
-    console.error(`[foto do grupo] Grupo "${GROUP_PHOTO_TARGET_NAME}" nao encontrado entre os grupos que o bot participa.`);
+    console.error('[foto do grupo] Grupo principal nao encontrado entre os grupos que o bot participa.');
     return;
   }
 
@@ -1944,7 +1951,7 @@ cron.schedule(
   async () => {
     if (!currentSock) return;
     try {
-      const groupJid = getGroupJidByName(GROUP_PHOTO_TARGET_NAME);
+      const groupJid = getMainGroupJid();
       if (!groupJid) return;
       const jids = getRecentSenderJids(groupJid);
       const { updated, total } = await syncAvatars(currentSock, jids);
@@ -2036,7 +2043,7 @@ async function startBot() {
       // Sincroniza fotos de perfil ao conectar tambem (alem do cron diario),
       // assim o painel ja mostra foto de todo mundo sem esperar ate 03h30.
       (async () => {
-        const groupJid = getGroupJidByName(GROUP_PHOTO_TARGET_NAME);
+        const groupJid = getMainGroupJid();
         if (groupJid) await syncAvatars(sock, getRecentSenderJids(groupJid));
       })().catch((err) => console.error('Erro ao sincronizar fotos de perfil ao conectar:', err));
       // Catch-up de mensagens agendadas: se o bot esteve desligado exatamente
