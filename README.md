@@ -176,7 +176,7 @@ Tudo em `src/` (JavaScript, módulos ES):
 | `dataQuestions.js` | Perguntas sobre dados do grupo via `@Bothierry` + IA |
 | `groupPhoto.js` | Foto do grupo/bot editada por IA |
 | `avatars.js` | Cache de fotos de perfil dos membros |
-| `displayNames.js` | Padroniza nomes na exibição (acento, maiúsculas, homônimos) |
+| `displayNames.js` | **Nome padronizado** de cada pessoa (acento, maiúsculas, homônimos) — usado em **todo lugar**: painel, rankings do WhatsApp, `!resumo`, eventos, perguntas sobre dados e aniversários |
 | `weather.js` | Previsão do tempo (Open-Meteo): dados por cidade e texto de reserva |
 | `weatherCard.js` | Desenha o **cartão de previsão** do bom dia (SVG → PNG com o resvg), estilo do painel |
 | `news.js` | Manchetes do G1 (RSS) |
@@ -184,6 +184,8 @@ Tudo em `src/` (JavaScript, módulos ES):
 | `report.js` | Relatório pelo terminal (`npm run report`) |
 
 Fora de `src/`: `deploy.sh` (deploy automático), `ecosystem.config.cjs` (PM2), `scripts/set-avatar.js` (associa foto a alguém na mão), `assets/` (foto-base do bot, imagens fixas, banner da propaganda, `fonts/` com a fonte Inter do cartão de previsão).
+
+**Nomes padronizados:** o mesmo nome (ex.: "Lucas Souza", "João Paulo", "Gabriel (Gabs)") aparece no painel, em `!ranking`, no ranking de fim de expediente e semanal, no `!resumo`, em `!eventos`/`!vou`/`!naovou`, nas respostas de perguntas sobre dados e nos aniversários — cartão, legenda, `!aniversariantes` e nome do grupo. Os apelidos da lista de aniversários (`birthdays.json`) só servem para achar o membro; quando há ligação, sai o nome padronizado dele. Para corrigir a grafia de alguém, edite o mapa em `src/displayNames.js`.
 
 **Grupo principal:** o código **não depende do nome do grupo** (que muda com frequência). O bot usa o único grupo em que está — ou, havendo vários, o mais ativo nos últimos 7 dias; o painel usa o grupo com mais mensagens na última semana (`getMainGroupJid()` em `db.js`).
 

@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { getAllRecordsForGroup } from './db.js';
+import { formatDisplayName } from './displayNames.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ALIASES_FILE = path.join(__dirname, '..', 'apelidos.txt');
@@ -183,7 +184,7 @@ function rankingPeriodo(records, { desde = null, ate = null, apenas_expediente =
     counts.set(r.senderName, (counts.get(r.senderName) || 0) + 1);
   }
   const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, top);
-  return { desde, ate, apenas_expediente, ranking: sorted.map(([nome, mensagens], i) => ({ posicao: i + 1, nome, mensagens })) };
+  return { desde, ate, apenas_expediente, ranking: sorted.map(([nome, mensagens], i) => ({ posicao: i + 1, nome: formatDisplayName(nome), mensagens })) };
 }
 
 /**

@@ -1369,7 +1369,7 @@ function renderMenu(query) {
       }
     } else if (cat.title === 'Aniversários') {
       const info = birthdayInfo(menuData.birthdays);
-      const filtered = info.list.filter((b) => !q || b.name.toLowerCase().includes(q));
+      const filtered = info.list.filter((b) => !q || b.name.toLowerCase().includes(q) || (b.display || '').toLowerCase().includes(q));
       extraCount = filtered.length;
       if (filtered.length > 0) {
         const pad = (n) => String(n).padStart(2, '0');
@@ -1377,7 +1377,7 @@ function renderMenu(query) {
         let banner = '';
         if (!q && info.next.length > 0) {
           const today = info.next[0].isToday;
-          const names = info.next.map((b) => escapeHtml(b.name)).join(' e ');
+          const names = info.next.map((b) => escapeHtml(b.display || b.name)).join(' e ');
           const first = info.next[0];
           banner =
             '<div class="bday-next' + (today ? ' is-today' : '') + '"><div class="lbl">' + (today ? '🎉 Hoje é aniversário de' : '🎂 Próximo aniversário') + '</div>' +
@@ -1393,8 +1393,8 @@ function renderMenu(query) {
             (b.photoV
               ? '<img class="avatar-mini" src="/birthday-photo?name=' + encodeURIComponent(b.name) + '&v=' + b.photoV + '" alt="" />'
               : b.jid ? avatarImg(b.jid, b.member || b.name, 'avatar-mini') : '<div class="avatar-fallback avatar-unknown" title="sem membro ligado">?</div>') +
-            '<span class="bday-name">' + escapeHtml(b.name) +
-            (b.member && b.member.toLowerCase() !== b.name.toLowerCase() ? '<small>' + escapeHtml(b.member) + '</small>' : '') + '</span>' +
+            '<span class="bday-name">' + escapeHtml(b.display || b.name) +
+            ((b.display || b.name).toLowerCase() !== b.name.toLowerCase() ? '<small>apelido na lista: ' + escapeHtml(b.name) + '</small>' : '') + '</span>' +
             '<span class="when">' + (b.past && !b.isNext ? '✓' : whenText(b)) + '</span></div>'
           ).join('');
       }
@@ -2237,7 +2237,9 @@ export function startDashboardServer(
       menu.birthdays = (menu.birthdays || []).map((b) => {
         const match = resolveBirthdayMember(b, members);
         const member = match ? members.find((m) => m.jid === match.jid) : null;
-        return { ...b, jid: match?.jid || null, member: member ? formatDisplayName(member.name) : null, photoV: birthdayPhotoVersion(b.name) };
+        const memberName = member ? formatDisplayName(member.name) : null;
+        // display = o nome padronizado (o mesmo do ranking); sem membro ligado, o da lista.
+        return { ...b, jid: match?.jid || null, member: memberName, display: memberName || b.name, photoV: birthdayPhotoVersion(b.name) };
       });
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(menu));
