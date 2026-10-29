@@ -41,6 +41,7 @@ import { getWeatherData, formatWeatherBlock } from './weather.js';
 import { renderWeatherCard } from './weatherCard.js';
 import { renderBirthdayCard, photoToDataUri } from './birthdayCard.js';
 import { resolveBirthdayMember, normalizeName } from './birthdayLinks.js';
+import { readBirthdayPhoto } from './birthdayPhotos.js';
 import { getPresidentSummary, getUrnasApuradasPorRegiao } from './elections.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -1081,15 +1082,15 @@ async function buildBirthdayCard(sock, people) {
   const members = groupJid ? getMemberList(groupJid) : [];
   const cardPeople = [];
   for (const person of people) {
+    // Foto enviada na mao pelo painel vence a do WhatsApp.
     const match = resolveBirthdayMember(person, members);
     let photoUri = null;
-    if (match) {
-      try {
-        const buffer = await getBirthdayPhotoBuffer(sock, match.jid);
-        if (buffer) photoUri = await photoToDataUri(buffer);
-      } catch (err) {
-        console.error(`Erro ao preparar a foto de ${person.name} pro cartao de aniversario:`, err);
-      }
+    try {
+      const uploaded = readBirthdayPhoto(person.name);
+      const buffer = uploaded || (match ? await getBirthdayPhotoBuffer(sock, match.jid) : null);
+      if (buffer) photoUri = await photoToDataUri(buffer);
+    } catch (err) {
+      console.error(`Erro ao preparar a foto de ${person.name} pro cartao de aniversario:`, err);
     }
     cardPeople.push({ name: person.name, photoUri });
   }
