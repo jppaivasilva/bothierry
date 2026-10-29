@@ -41,6 +41,16 @@ function describeWeatherCode(code) {
   return WEATHER_CODE_MAP[code] || { emoji: '🌡️', desc: 'tempo variável' };
 }
 
+// Tipo do icone do cartao de previsao (src/weatherCard.js) a partir do codigo WMO.
+function iconKindFromCode(code) {
+  if (code === 0 || code === 1) return 'sun';
+  if (code === 2) return 'partly';
+  if (code === 45 || code === 48) return 'fog';
+  if (code >= 95) return 'storm';
+  if (code >= 51) return 'rain';
+  return 'cloud';
+}
+
 async function fetchCityForecast(city) {
   const url =
     `https://api.open-meteo.com/v1/forecast?latitude=${city.lat}&longitude=${city.lon}` +
@@ -55,6 +65,7 @@ async function fetchCityForecast(city) {
     name: city.name,
     emoji,
     desc,
+    kind: iconKindFromCode(data.daily.weathercode[0]),
     min: Math.round(data.daily.temperature_2m_min[0]),
     max: Math.round(data.daily.temperature_2m_max[0]),
     chuva: data.daily.precipitation_probability_max[0],
@@ -62,19 +73,25 @@ async function fetchCityForecast(city) {
 }
 
 /**
- * Busca a previsao do dia pra todas as cidades acompanhadas e monta um bloco
- * de texto pronto pra mandar no WhatsApp. Cidades que falharem (API fora do
- * ar, etc) sao puladas silenciosamente — o bloco sai com as que deram certo,
- * e so fica vazio (retorna null) se TODAS falharem.
+ * Busca a previsao do dia pra todas as cidades acompanhadas. Cidades que
+ * falharem (API fora do ar, etc) sao puladas silenciosamente — a lista volta
+ * so com as que deram certo (vazia se TODAS falharem).
  */
-export async function getWeatherBlock() {
+export async function getWeatherData() {
   const results = await Promise.allSettled(CITIES.map(fetchCityForecast));
+  return results.filter((r) => r.status === 'fulfilled').map((r) => r.value);
+}
 
-  const linhas = results
-    .filter((r) => r.status === 'fulfilled')
-    .map((r) => r.value)
-    .map((c) => `${c.emoji} *${c.name}*: ${c.min}°C - ${c.max}°C, ${c.desc}, ${c.chuva}% chance de chuva`);
-
-  if (linhas.length === 0) return null;
+/**
+ * Bloco de texto pronto pra WhatsApp (plano B quando o cartao em imagem nao
+ * puder ser gerado). Retorna null se nao ha nenhuma cidade.
+ */
+export function formatWeatherBlock(cities) {
+  if (cities.length === 0) return null;
+  const linhas = cities.map((c) => `${c.emoji} *${c.name}*: ${c.min}°C - ${c.max}°C, ${c.desc}, ${c.chuva}% chance de chuva`);
   return `🌦️ *Previsão do tempo pra hoje:*\n${linhas.join('\n')}`;
+}
+
+export async function getWeatherBlock() {
+  return formatWeatherBlock(await getWeatherData());
 }
