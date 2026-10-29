@@ -407,7 +407,18 @@ const DASHBOARD_HTML = `<!doctype html>
   .menu-item:first-of-type { border-top: none; }
   .menu-cmd { display: inline-block; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; font-weight: 700; color: var(--accent-blue); background: rgba(0,122,255,.1); padding: 2px 8px; border-radius: 8px; }
   .menu-desc { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
-  .menu-birthday { display: flex; gap: 10px; align-items: baseline; padding: 5px 0; font-size: 13px; color: var(--text-primary); }
+  .menu-birthday { display: flex; gap: 10px; align-items: baseline; padding: 5px 8px; margin: 0 -8px; border-radius: 10px; font-size: 13px; color: var(--text-primary); }
+  .menu-birthday .when { margin-left: auto; font-size: 11px; font-weight: 600; color: var(--text-secondary); white-space: nowrap; }
+  .menu-birthday.past { opacity: .42; }
+  .menu-birthday.next { background: linear-gradient(90deg, rgba(0,122,255,.16), rgba(175,82,222,.16)); font-weight: 700; padding-top: 8px; padding-bottom: 8px; }
+  .menu-birthday.next .when { color: var(--accent-blue); }
+  .menu-birthday.today { background: rgba(255,204,0,.28); font-weight: 800; padding-top: 8px; padding-bottom: 8px; }
+  .menu-birthday.today .when { color: #b25e00; }
+  .bday-next { border-radius: 16px; padding: 14px 16px; margin: 12px 0 4px; color: #fff; background: linear-gradient(135deg, #2F8BFF, #8F6BFF); box-shadow: 0 8px 22px rgba(80,100,255,.28); }
+  .bday-next.is-today { background: linear-gradient(135deg, #ffb300, #ff7a00); box-shadow: 0 8px 22px rgba(255,140,0,.3); }
+  .bday-next .lbl { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; opacity: .85; }
+  .bday-next .nm { font-size: 20px; font-weight: 800; margin-top: 2px; }
+  .bday-next .dt { font-size: 13px; font-weight: 600; opacity: .92; margin-top: 2px; }
   .menu-date { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; font-weight: 700; color: var(--text-secondary); min-width: 38px; }
   .admin-only { display: none !important; }
   body.is-admin .admin-only { display: revert !important; }
@@ -1294,6 +1305,23 @@ async function loadMenu() {
   renderMenu('');
 }
 
+// Marca cada aniversariante como ja passou (este ano) / hoje / proximo / futuro,
+// com quantos dias faltam (se ja passou, conta pro ano que vem — usado pra achar
+// o proximo mesmo em dezembro). Data de "hoje" no fuso de Brasilia.
+function birthdayInfo(birthdays) {
+  const [ty, tm, td] = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date()).split('-').map(Number);
+  const todayUtc = Date.UTC(ty, tm - 1, td);
+  const list = birthdays.map((b) => {
+    const thisYear = Date.UTC(ty, b.month - 1, b.day);
+    const past = thisYear < todayUtc;
+    const days = Math.round(((past ? Date.UTC(ty + 1, b.month - 1, b.day) : thisYear) - todayUtc) / 86400000);
+    return { ...b, past, days, isToday: days === 0 };
+  });
+  const minDays = list.length ? Math.min(...list.map((b) => b.days)) : null;
+  list.forEach((b) => { b.isNext = b.days === minDays; });
+  return { list, next: list.filter((b) => b.isNext) };
+}
+
 function renderMenu(query) {
   const q = query.trim().toLowerCase().replace(/^[!/]/, '');
   const grid = document.getElementById('menuGrid');
@@ -1317,14 +1345,29 @@ function renderMenu(query) {
           ).join('') + '</div>';
       }
     } else if (cat.title === 'Aniversários') {
-      const birthdays = menuData.birthdays.filter((b) => !q || b.name.toLowerCase().includes(q));
-      extraCount = birthdays.length;
-      if (birthdays.length > 0) {
+      const info = birthdayInfo(menuData.birthdays);
+      const filtered = info.list.filter((b) => !q || b.name.toLowerCase().includes(q));
+      extraCount = filtered.length;
+      if (filtered.length > 0) {
+        const pad = (n) => String(n).padStart(2, '0');
+        const whenText = (b) => (b.isToday ? 'hoje 🎉' : b.days === 1 ? 'amanhã' : 'em ' + b.days + ' dias');
+        let banner = '';
+        if (!q && info.next.length > 0) {
+          const today = info.next[0].isToday;
+          const names = info.next.map((b) => escapeHtml(b.name)).join(' e ');
+          const first = info.next[0];
+          banner =
+            '<div class="bday-next' + (today ? ' is-today' : '') + '"><div class="lbl">' + (today ? '🎉 Hoje é aniversário de' : '🎂 Próximo aniversário') + '</div>' +
+            '<div class="nm">' + names + '</div>' +
+            '<div class="dt">' + pad(first.day) + '/' + pad(first.month) + (today ? '' : ' · ' + (first.days === 1 ? 'amanhã' : 'em ' + first.days + ' dias')) + '</div></div>';
+        }
         extra =
+          banner +
           '<div class="modal-section-label" style="margin-top:14px;">Aniversariantes cadastrados</div>' +
-          birthdays.map((b) =>
-            '<div class="menu-birthday"><span class="menu-date">' + String(b.day).padStart(2, '0') + '/' + String(b.month).padStart(2, '0') +
-            '</span>' + escapeHtml(b.name) + '</div>'
+          filtered.map((b) =>
+            '<div class="menu-birthday' + (b.isToday ? ' today' : b.isNext ? ' next' : b.past ? ' past' : '') + '">' +
+            '<span class="menu-date">' + pad(b.day) + '/' + pad(b.month) + '</span>' + escapeHtml(b.name) +
+            '<span class="when">' + (b.past && !b.isNext ? '✓' : whenText(b)) + '</span></div>'
           ).join('');
       }
     }
