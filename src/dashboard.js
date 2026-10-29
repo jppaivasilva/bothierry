@@ -542,7 +542,7 @@ const DASHBOARD_HTML = `<!doctype html>
   </div>
 
   <div id="tab-members" class="tab-panel">
-  <div class="sub">Todas as pessoas do grupo, em ordem alfabética · clique em alguém pra ver os detalhes</div>
+  <div class="sub">Todas as pessoas do grupo, em ordem de mensagens hoje (quem não falou fica por último) · clique em alguém pra ver os detalhes</div>
   <input type="text" id="memberSearch" class="member-search" placeholder="Buscar por nome..." />
   <div id="memberGrid" class="member-grid"></div>
   </div>
@@ -1070,8 +1070,13 @@ function personCell(jid, name) {
 // digitada na busca.
 let allMembers = null;
 
+let membersLoadedAt = 0;
+
 async function loadMembers() {
-  if (allMembers) return;
+  // A ordem depende das mensagens de hoje, entao recarrega ao abrir a aba
+  // (com um respiro de 30s pra nao refazer a consulta a cada clique).
+  if (allMembers && Date.now() - membersLoadedAt < 30000) return;
+  membersLoadedAt = Date.now();
   const res = await fetch('/api/members');
   allMembers = await res.json();
   renderMemberGrid(allMembers);
@@ -1569,7 +1574,9 @@ export function startDashboardServer(port, { getCommandsMenu = () => ({ categori
       const groupJid = getGroupJidByName(RANKING_GROUP_NAME);
       const members = groupJid ? getMemberList(groupJid) : [];
       members.forEach((m) => { m.name = formatDisplayName(m.name); });
-      members.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+      // Ranking de hoje: mais mensagens primeiro; empates (inclusive os com 0, que
+      // ficam por ultimo naturalmente) desempatam em ordem alfabetica.
+      members.sort((a, b) => b.todayCount - a.todayCount || a.name.localeCompare(b.name, 'pt-BR'));
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(members));
     } else if (req.url.startsWith('/api/member')) {
