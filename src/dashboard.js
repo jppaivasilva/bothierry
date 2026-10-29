@@ -445,39 +445,44 @@ const DASHBOARD_HTML = `<!doctype html>
      > .modal-overlay" empata nisso e, vindo depois no arquivo, vence. */
   body > .modal-overlay { position: fixed; inset: 0; z-index: 50; background: rgba(20,20,25,.32); display: flex; align-items: center; justify-content: center; padding: 20px; animation: fade-in .15s var(--ease-out); }
   .modal-card {
-    width: 100%; max-width: 560px; max-height: 88vh; overflow-y: auto; box-sizing: border-box;
+    width: 100%; max-width: 980px; max-height: 92vh; overflow-y: auto; box-sizing: border-box;
     background: rgba(255,255,255,.82); backdrop-filter: blur(32px) saturate(180%); -webkit-backdrop-filter: blur(32px) saturate(180%);
     border: 1px solid var(--glass-border); border-radius: 22px; box-shadow: 0 24px 64px rgba(31,41,55,.28), inset 0 1px 0 rgba(255,255,255,.8);
-    padding: 26px; animation: fade-up .25s var(--ease-out);
+    padding: 32px; animation: fade-up .25s var(--ease-out);
   }
   .modal-close { float: right; width: 28px; height: 28px; border-radius: 50%; border: none; cursor: pointer; background: rgba(118,118,128,.14); color: var(--text-secondary); font-size: 14px; font-weight: 700; line-height: 28px; text-align: center; }
   .modal-header { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; clear: both; }
-  .modal-header .avatar-mini, .modal-header .avatar-fallback { width: 64px; height: 64px; font-size: 22px; box-shadow: 0 6px 16px rgba(0,0,0,.12); }
-  .modal-header-name { font-size: 19px; font-weight: 800; letter-spacing: -.01em; }
+  .modal-header .avatar-mini, .modal-header .avatar-fallback { width: 76px; height: 76px; font-size: 26px; box-shadow: 0 6px 16px rgba(0,0,0,.12); }
+  .modal-header-name { font-size: 24px; font-weight: 800; letter-spacing: -.01em; }
   .modal-header-sub { font-size: 12.5px; color: var(--text-secondary); margin-top: 2px; }
   .modal-section-label { font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-bottom: 8px; text-transform: uppercase; letter-spacing: .04em; }
   .modal-totals { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; margin-bottom: 18px; }
   .modal-totals > div { background: rgba(255,255,255,.6); border: 1px solid var(--glass-border); border-radius: 14px; padding: 12px; }
-  .modal-totals .n { font-size: 20px; font-weight: 800; margin-top: 2px; }
+  .modal-totals .n { font-size: 28px; font-weight: 800; margin-top: 2px; }
   .podium-row { display: flex; gap: 10px; margin-bottom: 20px; }
   .podium-chip { flex: 1; display: flex; align-items: center; gap: 8px; border-radius: 12px; padding: 10px 12px; }
   .podium-chip .medal { width: 22px; height: 22px; border-radius: 50%; color: #fff; font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-  .podium-chip .n { font-size: 15px; font-weight: 800; }
+  .podium-chip .n { font-size: 18px; font-weight: 800; }
   .podium-gold { background: rgba(255,214,0,.14); } .podium-gold .medal { background: #e8b400; }
   .podium-silver { background: rgba(142,142,147,.14); } .podium-silver .medal { background: #9a9ca0; }
   .podium-bronze { background: rgba(205,127,50,.14); } .podium-bronze .medal { background: #c97a3d; }
-  .mini-heatmap { display: flex; flex-direction: column; gap: 3px; margin-bottom: 10px; }
+  .mini-heatmap-scroll { overflow-x: auto; margin-bottom: 12px; padding-bottom: 4px; }
+  .mini-heatmap { display: flex; flex-direction: column; gap: 3px; min-width: 700px; }
   .mini-heatmap-row { display: flex; align-items: center; gap: 6px; }
-  .mini-heatmap-row .wd { width: 26px; font-size: 10px; color: var(--text-secondary); flex-shrink: 0; }
+  .mini-heatmap-row .wd { width: 34px; font-size: 12px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0; }
+  .mini-heatmap-row .tot { width: 40px; text-align: right; font-size: 12px; font-weight: 700; color: var(--text-primary); flex-shrink: 0; }
+  .mini-heatmap-row.head .wd, .mini-heatmap-row.head .tot { height: auto; }
   .mini-heatmap-cells { display: flex; gap: 2px; flex: 1; }
-  .mini-heatmap-cells > div { flex: 1; height: 13px; border-radius: 3px; }
-  .modal-peaks { display: flex; gap: 14px; margin-bottom: 20px; font-size: 12px; color: var(--text-secondary); }
+  .mini-heatmap-cells > div { flex: 1; min-width: 0; height: 30px; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+  .mini-heatmap-cells > div.hot { color: #fff; }
+  .mini-heatmap-row.head .mini-heatmap-cells > div { height: auto; font-size: 10px; font-weight: 600; color: var(--text-secondary); }
+  .modal-peaks { display: flex; gap: 18px; margin-bottom: 22px; font-size: 14px; color: var(--text-secondary); }
   .modal-peaks b { color: var(--text-primary); }
   .trend-sparkline { display: flex; align-items: flex-end; gap: 4px; background: rgba(255,255,255,.5); border-radius: 10px; padding: 10px 8px 6px; box-sizing: border-box; }
   .trend-bar { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; }
-  .trend-bar .n { font-size: 10px; font-weight: 700; color: var(--text-secondary); }
+  .trend-bar .n { font-size: 12px; font-weight: 700; color: var(--text-secondary); }
   .trend-bar .bar { width: 100%; min-height: 2px; border-radius: 3px; background: linear-gradient(180deg, var(--accent-blue), var(--accent-purple)); }
-  .trend-bar .d { font-size: 9px; color: var(--text-secondary); white-space: nowrap; }
+  .trend-bar .d { font-size: 11px; color: var(--text-secondary); white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -1195,17 +1200,27 @@ async function openMemberModal(jid) {
   const s = await res.json();
 
   const maxCell = Math.max(1, ...s.heatmap.matrix.flat());
-  const heatmapHtml = s.heatmap.matrix
-    .map(
-      (row, d) =>
+  const hourHead =
+    '<div class="mini-heatmap-row head"><div class="wd"></div><div class="mini-heatmap-cells">' +
+    Array.from({ length: 24 }, (_, h) => '<div>' + h + '</div>').join('') +
+    '</div><div class="tot">Total</div></div>';
+  const heatmapHtml = hourHead + s.heatmap.matrix
+    .map((row, d) => {
+      const dayTotal = row.reduce((a, b) => a + b, 0);
+      return (
         '<div class="mini-heatmap-row"><div class="wd">' + WEEKDAY_SHORT[d] + '</div><div class="mini-heatmap-cells">' +
-        row.map((count) => '<div style="background:' + HEAT_COLORS[heatLevel(count, maxCell)] + '"></div>').join('') +
-        '</div></div>',
-    )
+        row.map((count, h) => {
+          const level = heatLevel(count, maxCell);
+          return '<div class="' + (level >= 3 ? 'hot' : '') + '" style="background:' + HEAT_COLORS[level] + '" title="' +
+            WEEKDAY_SHORT[d] + ' ' + String(h).padStart(2, '0') + 'h: ' + count + ' msgs">' + (count > 0 ? count : '') + '</div>';
+        }).join('') +
+        '</div><div class="tot">' + dayTotal + '</div></div>'
+      );
+    })
     .join('');
 
   const maxTrend = Math.max(1, ...s.trend.counts);
-  const TREND_BAR_MAX_PX = 56;
+  const TREND_BAR_MAX_PX = 96;
   const trendHtml = s.trend.counts
     .map((c, i) => {
       const [, m, d] = s.trend.dates[i].split('-');
@@ -1242,8 +1257,8 @@ async function openMemberModal(jid) {
     '<div class="podium-chip podium-silver"><div class="medal">2º</div><div class="n">' + s.silver + '</div></div>' +
     '<div class="podium-chip podium-bronze"><div class="medal">3º</div><div class="n">' + s.bronze + '</div></div>' +
     '</div>' +
-    '<div class="modal-section-label">Mapa de calor pessoal</div>' +
-    '<div class="mini-heatmap">' + heatmapHtml + '</div>' +
+    '<div class="modal-section-label">Mapa de calor pessoal (mensagens por dia da semana e hora)</div>' +
+    '<div class="mini-heatmap-scroll"><div class="mini-heatmap">' + heatmapHtml + '</div></div>' +
     '<div class="modal-peaks">' +
     '<div>Horário preferido: <b>' + String(s.peakHour).padStart(2, '0') + 'h</b></div>' +
     '<div>Dia preferido: <b>' + s.peakDayName + '</b></div>' +
