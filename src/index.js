@@ -2154,7 +2154,7 @@ async function startBot() {
       const urls = extractUrls(text);
       if (urls.length > 0) {
         debugLog(
-          `[debug] link detectado: ${JSON.stringify(urls)} | tem extendedTextMessage: ${!!msg.message.extendedTextMessage} | temThumbnail: ${!!msg.message.extendedTextMessage?.jpegThumbnail}`
+          `[debug] link detectado: ${JSON.stringify(urls)} | tem extendedTextMessage: ${!!msg.message.extendedTextMessage} | temThumbnail: ${!!msg.message.extendedTextMessage?.jpegThumbnail} | thumbnailDirectPath: ${!!msg.message.extendedTextMessage?.thumbnailDirectPath} | titulo: ${!!msg.message.extendedTextMessage?.title}`
         );
         const since = Math.floor(Date.now() / 1000) - LINK_REPEAT_WINDOW_HOURS * 60 * 60;
         const isRepeated = urls.some((url) => wasUrlSentSince(groupJid, url, since));
@@ -2193,7 +2193,10 @@ async function startBot() {
         // tambem gera extendedTextMessage (sem thumbnail nenhum, obviamente),
         // entao precisamos excluir esse caso pra nao disparar em qualquer reply.
         const extendedText = msg.message.extendedTextMessage;
-        const temThumbnail = !!extendedText?.jpegThumbnail;
+        // Clientes novos do WhatsApp mandam a imagem da previa como arquivo
+        // (thumbnailDirectPath/thumbnailSha256) em vez do jpegThumbnail inline —
+        // olhar so o jpegThumbnail dava falso "sem thumb" em link COM previa.
+        const temThumbnail = !!(extendedText?.jpegThumbnail || extendedText?.thumbnailDirectPath || extendedText?.thumbnailSha256);
         const isQuotedReply = !!extendedText?.contextInfo?.quotedMessage;
         if (!temThumbnail && !isQuotedReply) {
           try {
