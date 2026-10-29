@@ -366,6 +366,15 @@ const DASHBOARD_HTML = `<!doctype html>
   .tab-panel.active { display: block; }
 
   /* Aba Membros */
+  .menu-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+  .menu-title { font-size: 15px; font-weight: 700; color: var(--text-primary); margin-bottom: 12px; }
+  .menu-item { padding: 8px 0; border-top: 1px solid rgba(60,60,67,.08); }
+  .menu-item:first-of-type { border-top: none; }
+  .menu-cmd { display: inline-block; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; font-weight: 700; color: var(--accent-blue); background: rgba(0,122,255,.1); padding: 2px 8px; border-radius: 8px; }
+  .menu-desc { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
+  .menu-birthday { display: flex; gap: 10px; align-items: baseline; padding: 5px 0; font-size: 13px; color: var(--text-primary); }
+  .menu-date { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; font-weight: 700; color: var(--text-secondary); min-width: 38px; }
+  .menu-chips { display: flex; flex-wrap: wrap; gap: 6px; }
   .member-search { width: 100%; max-width: 320px; font-size: 14px; font-family: inherit; padding: 10px 14px; border-radius: 12px; border: 1px solid rgba(60,60,67,.14); background: rgba(255,255,255,.7); color: var(--text-primary); outline: none; margin-bottom: 20px; transition: border-color .15s var(--ease-out), box-shadow .15s var(--ease-out); }
   .member-search:focus { border-color: var(--accent-blue); box-shadow: 0 0 0 4px rgba(0,122,255,.14); }
   .member-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
@@ -445,6 +454,7 @@ const DASHBOARD_HTML = `<!doctype html>
       <button class="tab-btn" data-tab="members">Membros</button>
       <button class="tab-btn" data-tab="system">Sistema</button>
       <button class="tab-btn" data-tab="server">Servidor</button>
+      <button class="tab-btn" data-tab="menu">Menu</button>
     </div>
 
     <div class="header-status">
@@ -535,6 +545,12 @@ const DASHBOARD_HTML = `<!doctype html>
   <div class="sub">Todas as pessoas do grupo, em ordem alfabética · clique em alguém pra ver os detalhes</div>
   <input type="text" id="memberSearch" class="member-search" placeholder="Buscar por nome..." />
   <div id="memberGrid" class="member-grid"></div>
+  </div>
+
+  <div id="tab-menu" class="tab-panel">
+  <div class="sub">Todos os comandos do bot · mande no grupo começando com ! (ou /)</div>
+  <input type="text" id="menuSearch" class="member-search" placeholder="Buscar comando..." />
+  <div id="menuGrid" class="menu-grid"></div>
   </div>
 
   <div id="tab-system" class="tab-panel">
@@ -639,6 +655,7 @@ document.querySelectorAll('.tabs:not(#rankingToggle) > .tab-btn').forEach((btn) 
     if (btn.dataset.tab === 'activity' && trendChart) trendChart.resize();
     if (btn.dataset.tab === 'server' && systemHistoryChart) systemHistoryChart.resize();
     if (btn.dataset.tab === 'members') loadMembers();
+    if (btn.dataset.tab === 'menu') loadMenu();
   });
 });
 let chart;
@@ -1171,6 +1188,61 @@ function closeMemberModal() {
   document.querySelectorAll('.modal-overlay').forEach((el) => el.remove());
 }
 
+let menuData = null;
+
+async function loadMenu() {
+  if (menuData) return;
+  const res = await fetch('/api/commands');
+  menuData = await res.json();
+  renderMenu('');
+}
+
+function renderMenu(query) {
+  const q = query.trim().toLowerCase().replace(/^[!/]/, '');
+  const grid = document.getElementById('menuGrid');
+  const blocks = [];
+  menuData.categories.forEach((cat) => {
+    const items = cat.commands.filter((c) => !q || c.name.includes(q) || c.description.toLowerCase().includes(q));
+    // Conteudo dinamico que mora dentro do card da categoria: audios salvos
+    // no card "Áudios" e a lista de aniversariantes no card "Aniversários".
+    let extra = '';
+    let extraCount = 0;
+    if (cat.title === 'Áudios') {
+      const audios = menuData.audios.filter((a) => !q || a.includes(q));
+      extraCount = audios.length;
+      if (audios.length > 0) {
+        extra =
+          '<div class="modal-section-label" style="margin-top:14px;">Áudios salvos (mande !nome pra tocar)</div>' +
+          '<div class="menu-chips">' + audios.map((a) => '<span class="menu-cmd">!' + escapeHtml(a) + '</span>').join('') + '</div>';
+      }
+    } else if (cat.title === 'Aniversários') {
+      const birthdays = menuData.birthdays.filter((b) => !q || b.name.toLowerCase().includes(q));
+      extraCount = birthdays.length;
+      if (birthdays.length > 0) {
+        extra =
+          '<div class="modal-section-label" style="margin-top:14px;">Aniversariantes cadastrados</div>' +
+          birthdays.map((b) =>
+            '<div class="menu-birthday"><span class="menu-date">' + String(b.day).padStart(2, '0') + '/' + String(b.month).padStart(2, '0') +
+            '</span>' + escapeHtml(b.name) + '</div>'
+          ).join('');
+      }
+    }
+    if (items.length === 0 && extraCount === 0) return;
+    blocks.push(
+      '<div class="card"><div class="menu-title">' + escapeHtml(cat.emoji) + ' ' + escapeHtml(cat.title) + '</div>' +
+      items.map((c) =>
+        '<div class="menu-item"><span class="menu-cmd">!' + escapeHtml(c.name) + '</span>' +
+        '<div class="menu-desc">' + escapeHtml(c.description) + '</div></div>'
+      ).join('') + extra + '</div>'
+    );
+  });
+  grid.innerHTML = blocks.length ? blocks.join('') : '<div class="member-empty">Nenhum comando encontrado.</div>';
+}
+
+document.getElementById('menuSearch').addEventListener('input', (e) => {
+  if (menuData) renderMenu(e.target.value);
+});
+
 async function refreshRanking() {
   const { endpoint, emptyMsg } = RANKING_RANGES[rankingRange];
   const dateParam = document.getElementById('rankingDate').value || todayBR();
@@ -1396,7 +1468,7 @@ function renderLoginPage(hasError) {
  * (status de conexao, uptime, mensagens por hora, eventos recentes). So
  * modulo nativo 'http' — nenhuma dependencia nova no projeto.
  */
-export function startDashboardServer(port) {
+export function startDashboardServer(port, { getCommandsMenu = () => ({ categories: [], audios: [], birthdays: [] }) } = {}) {
   const server = http.createServer((req, res) => {
     const ip = req.socket.remoteAddress || 'unknown';
     const urlObj = new URL(req.url, 'http://localhost');
@@ -1486,6 +1558,9 @@ export function startDashboardServer(port) {
       trend.series = trend.series.map((s) => ({ ...s, name: formatDisplayName(s.name) }));
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(trend));
+    } else if (req.url === '/api/commands') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(getCommandsMenu()));
     } else if (req.url === '/api/heatmap') {
       const groupJid = getGroupJidByName(RANKING_GROUP_NAME);
       res.writeHead(200, { 'Content-Type': 'application/json' });
