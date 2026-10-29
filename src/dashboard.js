@@ -468,6 +468,9 @@ const DASHBOARD_HTML = `<!doctype html>
      enorme e vazio). */
   .menu-grid { column-width: 320px; column-gap: 14px; }
   .menu-grid > .card, .menu-grid > .member-empty { break-inside: avoid; margin-bottom: 14px; }
+  /* Comandos: colunas fixas (a ordem da esquerda pra direita nao depende da altura dos cartoes). */
+  .menu-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; align-items: start; }
+  .menu-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
   .menu-title { font-size: 15px; font-weight: 700; color: var(--text-primary); margin-bottom: 12px; }
   .menu-item { padding: 8px 0; border-top: 1px solid rgba(60,60,67,.08); }
   .menu-item:first-of-type { border-top: none; }
@@ -705,7 +708,7 @@ const DASHBOARD_HTML = `<!doctype html>
   <div id="tab-menu" class="tab-panel">
   <div class="sub">Todos os comandos do bot · mande no grupo começando com ! (ou /)</div>
   <input type="text" id="menuSearch" class="member-search" placeholder="Buscar comando..." />
-  <div id="menuGrid" class="menu-grid"></div>
+  <div id="menuGrid" class="menu-cols"></div>
   </div>
 
   <div id="tab-events" class="tab-panel">
@@ -1521,7 +1524,7 @@ function birthdayInfo(birthdays) {
 function renderMenu(query) {
   const q = query.trim().toLowerCase().replace(/^[!/]/, '');
   const grid = document.getElementById('menuGrid');
-  const blocks = [];
+  const blocks = {}; // titulo da categoria -> html do cartao
   menuData.categories.forEach((cat) => {
     const items = cat.commands.filter((c) => !q || c.name.includes(q) || c.description.toLowerCase().includes(q));
     // Conteudo dinamico que mora dentro do card da categoria: audios salvos
@@ -1573,7 +1576,7 @@ function renderMenu(query) {
       }
     }
     if (items.length === 0 && extraCount === 0) return;
-    blocks.push(
+    blocks[cat.title] = (
       '<div class="card"><div class="menu-title">' + escapeHtml(cat.emoji) + ' ' + escapeHtml(cat.title) + '</div>' +
       items.map((c) =>
         '<div class="menu-item"><span class="menu-cmd">!' + escapeHtml(c.name) + '</span>' +
@@ -1581,7 +1584,14 @@ function renderMenu(query) {
       ).join('') + extra + '</div>'
     );
   });
-  grid.innerHTML = blocks.length ? blocks.join('') : '<div class="member-empty">Nenhum comando encontrado.</div>';
+  // Colunas, da esquerda pra direita. O cartao de Áudios fica ao lado esquerdo do Outros.
+  // Categoria nova que nao esteja aqui entra na ultima coluna.
+  const COLUMN_LAYOUT = [['Ranking e regras', 'Eventos'], ['Aniversários'], ['Áudios'], ['Outros']];
+  const placed = new Set(COLUMN_LAYOUT.flat());
+  const cols = COLUMN_LAYOUT.map((titles) => titles.map((t) => blocks[t]).filter(Boolean));
+  Object.keys(blocks).filter((t) => !placed.has(t)).forEach((t) => cols[cols.length - 1].push(blocks[t]));
+  const html = cols.filter((c) => c.length > 0).map((c) => '<div class="menu-col">' + c.join('') + '</div>').join('');
+  grid.innerHTML = html || '<div class="member-empty">Nenhum comando encontrado.</div>';
 }
 
 document.getElementById('menuSearch').addEventListener('input', (e) => {
