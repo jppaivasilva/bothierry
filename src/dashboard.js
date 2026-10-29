@@ -410,6 +410,11 @@ const DASHBOARD_HTML = `<!doctype html>
   .menu-cmd { display: inline-block; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; font-weight: 700; color: var(--accent-blue); background: rgba(0,122,255,.1); padding: 2px 8px; border-radius: 8px; }
   .menu-desc { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
   .menu-birthday { display: flex; gap: 10px; align-items: baseline; padding: 5px 8px; margin: 0 -8px; border-radius: 10px; font-size: 13px; color: var(--text-primary); }
+  .menu-birthday { align-items: center; }
+  .menu-birthday .avatar-mini, .menu-birthday .avatar-fallback { width: 30px; height: 30px; font-size: 11px; box-shadow: 0 0 0 2px #fff, 0 2px 6px rgba(0,0,0,.12); }
+  .avatar-unknown { display: flex; align-items: center; justify-content: center; background: #c7c7cc; color: #fff; font-weight: 800; }
+  .bday-name { display: flex; flex-direction: column; min-width: 0; }
+  .bday-name small { font-size: 11px; font-weight: 500; color: var(--text-secondary); margin-top: 1px; }
   .menu-birthday .when { margin-left: auto; font-size: 11px; font-weight: 600; color: var(--text-secondary); white-space: nowrap; }
   .menu-birthday.past { opacity: .42; }
   .menu-birthday.next { background: linear-gradient(90deg, rgba(0,122,255,.16), rgba(175,82,222,.16)); font-weight: 700; padding-top: 8px; padding-bottom: 8px; }
@@ -1382,7 +1387,10 @@ function renderMenu(query) {
           '<div class="modal-section-label" style="margin-top:14px;">Aniversariantes cadastrados</div>' +
           filtered.map((b) =>
             '<div class="menu-birthday' + (b.isToday ? ' today' : b.isNext ? ' next' : b.past ? ' past' : '') + '">' +
-            '<span class="menu-date">' + pad(b.day) + '/' + pad(b.month) + '</span>' + escapeHtml(b.name) +
+            '<span class="menu-date">' + pad(b.day) + '/' + pad(b.month) + '</span>' +
+            (b.jid ? avatarImg(b.jid, b.member || b.name, 'avatar-mini') : '<div class="avatar-fallback avatar-unknown" title="sem membro ligado">?</div>') +
+            '<span class="bday-name">' + escapeHtml(b.name) +
+            (b.member && b.member.toLowerCase() !== b.name.toLowerCase() ? '<small>' + escapeHtml(b.member) + '</small>' : '') + '</span>' +
             '<span class="when">' + (b.past && !b.isNext ? '✓' : whenText(b)) + '</span></div>'
           ).join('');
       }
@@ -2114,8 +2122,18 @@ export function startDashboardServer(
         sendJson(res, 200, { ok: true });
       });
     } else if (req.url === '/api/commands') {
+      const menu = getCommandsMenu();
+      // Junta a cada aniversariante o membro ligado (foto + nome), pra conferir
+      // na lista se a pessoa certa foi associada.
+      const groupJid = getMainGroupJid();
+      const members = groupJid ? getMemberList(groupJid) : [];
+      menu.birthdays = (menu.birthdays || []).map((b) => {
+        const match = resolveBirthdayMember(b, members);
+        const member = match ? members.find((m) => m.jid === match.jid) : null;
+        return { ...b, jid: match?.jid || null, member: member ? formatDisplayName(member.name) : null };
+      });
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(getCommandsMenu()));
+      res.end(JSON.stringify(menu));
     } else if (req.url === '/api/heatmap') {
       const groupJid = getMainGroupJid();
       res.writeHead(200, { 'Content-Type': 'application/json' });
