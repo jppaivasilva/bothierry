@@ -7,7 +7,7 @@ import { getDashboardData, getMessagesPerHourForDate, getSystemStats, getSystemS
 import { getCountsBetween, getMainGroupJid, getMessageTrend, getActivityHeatmap, getTopSenderPerHour, getMemberList, getMemberStats } from './db.js';
 import { loadBirthdays } from './birthdays.js';
 import { resolveBirthdayMember, suggestBirthdayMembers, setBirthdayLink, normalizeName } from './birthdayLinks.js';
-import { birthdayPhotoPath, birthdayPhotoVersion, saveBirthdayPhoto, deleteBirthdayPhoto, memberPhotoPath, memberPhotoVersion, saveMemberPhoto, deleteMemberPhoto } from './birthdayPhotos.js';
+import { birthdayPhotoPath, birthdayPhotoVersion, deleteBirthdayPhoto, memberPhotoPath, memberPhotoVersion, saveMemberPhoto, deleteMemberPhoto } from './birthdayPhotos.js';
 import { BOT_PHOTO_PATH } from './groupPhoto.js';
 import { formatDisplayName } from './displayNames.js';
 import { getAvatarPath } from './avatars.js';
@@ -509,7 +509,6 @@ const DASHBOARD_HTML = `<!doctype html>
   .bday-row .who { flex: 1; min-width: 150px; font-size: 14px; font-weight: 600; }
   .bday-row .who small { display: block; font-size: 11px; font-weight: 500; color: var(--text-secondary); }
   .bday-row select { font-family: inherit; font-size: 13px; padding: 7px 8px; border-radius: 10px; border: 1px solid rgba(60,60,67,.18); background: rgba(255,255,255,.8); max-width: 100%; }
-  .bday-upload { cursor: pointer; display: inline-block; }
   .bday-row .tag { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
   .tag-manual { background: rgba(0,122,255,.14); color: var(--accent-blue); }
   .tag-auto { background: rgba(52,199,89,.16); color: #1f8f3d; }
@@ -778,8 +777,8 @@ const DASHBOARD_HTML = `<!doctype html>
     <div class="log-box" id="logBox">Clique em Atualizar.</div>
   </div>
   <div class="chart-box admin-only" style="margin-top:16px;">
-    <div class="section-head">Aniversariantes e fotos</div>
-    <div class="menu-desc" style="margin:0 0 12px;">Escolha qual membro é cada aniversariante, pra foto dele sair no cartão de aniversário. "Automático" usa o nome (só quando bate com uma pessoa só).</div>
+    <div class="section-head">Aniversariantes</div>
+    <div class="menu-desc" style="margin:0 0 12px;">Escolha qual membro é cada aniversariante (o nome e a foto do membro saem no cartão e na lista). "Automático" usa o nome (só quando bate com uma pessoa só). Para trocar uma foto, toque nela na aba Membros.</div>
     <div id="bdayLinks">Carregando...</div>
   </div>
   </div>
@@ -1611,9 +1610,9 @@ async function loadBdayAdmin() {
     const data = await res.json();
     const pad = (n) => String(n).padStart(2, '0');
     box.innerHTML = data.birthdays.map((b, i) => {
-      const tag = b.photoV ? '<span class="tag tag-manual">foto enviada</span>' : b.source === 'manual' ? '<span class="tag tag-manual">manual</span>'
+      const tag = b.source === 'manual' ? '<span class="tag tag-manual">manual</span>'
         : b.source === 'auto' ? '<span class="tag tag-auto">automático</span>'
-        : '<span class="tag tag-none">sem foto</span>';
+        : '<span class="tag tag-none">sem ligação</span>';
       const options = '<option value="">(automático)</option>' + data.members.map((m) =>
         '<option value="' + escapeHtml(m.jid) + '"' + (b.source === 'manual' && b.jid === m.jid ? ' selected' : '') + '>' + escapeHtml(m.name) + '</option>'
       ).join('');
@@ -1623,11 +1622,6 @@ async function loadBdayAdmin() {
       return '<div class="bday-row">' + photo +
         '<div class="who">' + escapeHtml(b.name) + '<small>' + pad(b.day) + '/' + pad(b.month) + '</small></div>' + tag +
         '<select data-idx="' + i + '">' + options + '</select>' +
-        (b.jid
-          ? '<span class="menu-desc" style="margin:0;">foto: toque na foto na aba Membros</span>'
-          : '<label class="action-btn bday-upload">' + (b.photoV ? 'Trocar foto' : 'Enviar foto') +
-            '<input type="file" accept="image/*" data-idx="' + i + '" hidden /></label>' +
-            (b.photoV ? '<button class="action-btn bday-photo-del" data-idx="' + i + '">Remover foto</button>' : '')) +
         (b.suggestions || []).map((m) => '<button class="action-btn bday-suggest" data-idx="' + i + '" data-jid="' + escapeHtml(m.jid) + '">Usar ' + escapeHtml(m.name) + '</button>').join('') +
         '</div>';
     }).join('');
@@ -1653,44 +1647,12 @@ async function saveBdayLink(idx, jid) {
   }
 }
 
-async function sendBdayPhoto(idx, file) {
-  const names = JSON.parse(document.getElementById('bdayLinks').dataset.names || '[]');
-  const name = names[Number(idx)];
-  try {
-    const res = await fetch('/api/admin/birthday-photo?name=' + encodeURIComponent(name), {
-      method: 'POST',
-      headers: { 'X-Requested-With': 'panel', 'Content-Type': file.type || 'application/octet-stream' },
-      body: file,
-    });
-    const data = await res.json();
-    if (!data.ok) alert('Não enviou: ' + (data.error || 'erro'));
-    await loadBdayAdmin();
-    menuData = null;
-  } catch {
-    alert('Não consegui enviar a foto. Tenta de novo.');
-  }
-}
-
-document.getElementById('bdayLinks').addEventListener('click', async (e) => {
-  const del = e.target.closest('.bday-photo-del');
-  if (!del) return;
-  if (!confirm('Remover a foto enviada?')) return;
-  const names = JSON.parse(document.getElementById('bdayLinks').dataset.names || '[]');
-  await fetch('/api/admin/birthday-photo/delete?name=' + encodeURIComponent(names[Number(del.dataset.idx)]), {
-    method: 'POST', headers: { 'X-Requested-With': 'panel' },
-  });
-  await loadBdayAdmin();
-  menuData = null;
-});
-
 document.getElementById('bdayLinks').addEventListener('click', (e) => {
   const btn = e.target.closest('.bday-suggest');
   if (btn) saveBdayLink(btn.dataset.idx, btn.dataset.jid);
 });
 
 document.getElementById('bdayLinks').addEventListener('change', async (e) => {
-  const file = e.target.closest('input[type=file]');
-  if (file && file.files && file.files[0]) { sendBdayPhoto(file.dataset.idx, file.files[0]); return; }
   const sel = e.target.closest('select');
   if (sel) saveBdayLink(sel.dataset.idx, sel.value);
 });
@@ -2369,36 +2331,6 @@ export function startDashboardServer(
           await saveMemberPhoto(jid, buffer);
           invalidateUploadedPhotoMap();
           console.log(`[painel] foto enviada pro membro ${jid} (${Math.round(buffer.length / 1024)} KB)`);
-          sendJson(res, 200, { ok: true });
-        } catch {
-          sendJson(res, 400, { ok: false, error: 'esse arquivo não parece uma imagem válida' });
-        }
-      });
-    } else if (req.url.startsWith('/api/admin/birthday-photo') && req.method === 'POST') {
-      if (!isAdmin(req)) return sendJson(res, 403, { ok: false, error: 'só o administrador pode fazer isso' });
-      if (!isPanelRequest(req)) return sendJson(res, 403, { ok: false, error: 'requisição inválida' });
-      const url = new URL(req.url, 'http://localhost');
-      const name = url.searchParams.get('name') || '';
-      const isDelete = url.pathname.endsWith('/delete');
-      const exists = loadBirthdays().some((b) => normalizeName(b.name) === normalizeName(name));
-      if (!exists) {
-        req.resume();
-        return sendJson(res, 404, { ok: false, error: 'aniversariante não encontrado' });
-      }
-      if (isDelete) {
-        req.resume();
-        deleteBirthdayPhoto(name);
-        invalidateUploadedPhotoMap();
-        console.log(`[painel] foto enviada de "${name}" removida`);
-        return sendJson(res, 200, { ok: true });
-      }
-      readRawBody(req, PHOTO_UPLOAD_MAX_BYTES, async (err, buffer) => {
-        if (err?.tooLarge) return sendJson(res, 413, { ok: false, error: 'foto grande demais (máx. 15 MB)' });
-        if (err || !buffer || buffer.length === 0) return sendJson(res, 400, { ok: false, error: 'não recebi a foto' });
-        try {
-          await saveBirthdayPhoto(name, buffer);
-          invalidateUploadedPhotoMap();
-          console.log(`[painel] foto enviada pra "${name}" (${Math.round(buffer.length / 1024)} KB)`);
           sendJson(res, 200, { ok: true });
         } catch {
           sendJson(res, 400, { ok: false, error: 'esse arquivo não parece uma imagem válida' });
