@@ -1399,7 +1399,7 @@ async function loadEvents() {
   }
   grid.innerHTML = data.events.map((e, i) => {
     const extras = Object.keys(e.extra).map((k) => '<div class="menu-desc">' + escapeHtml(k) + ': ' + escapeHtml(e.extra[k]) + '</div>').join('');
-    const names = (list) => list.length ? list.map(escapeHtml).join(', ') : '—';
+    const names = (list) => list.length ? list.map((n) => '<div>' + escapeHtml(n) + '</div>').join('') : '—';
     const buttons = data.me
       ? '<div class="rsvp-row">' +
         '<button class="rsvp-btn' + (e.myStatus === 'going' ? ' on-going' : '') + '" data-idx="' + i + '" data-status="going">✅ Vou</button>' +
