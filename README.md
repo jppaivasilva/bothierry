@@ -168,6 +168,8 @@ Tudo em `src/` (JavaScript, módulos ES):
 | `metrics.js` | Métricas do painel: conexão, comandos mais usados, última execução de cada cron, CPU/memória/disco da VM |
 | `events.js` | Eventos e presença (`events.json`) |
 | `birthdays.js` | Aniversariantes e controle de renomear o grupo |
+| `birthdayCard.js` | Desenha o **cartão de aniversário** (estilo "festa escura", foto + confete) em SVG → PNG |
+| `birthdayLinks.js` | Liga cada aniversariante ao membro do grupo (pra achar a foto): ligação manual do painel ou automática pelo nome/apelido |
 | `scheduled.js` | Mensagens agendadas pontuais (`scheduled_messages.json`) |
 | `rules.js` | Regras do grupo (`regras/*.txt`) |
 | `dataQuestions.js` | Perguntas sobre dados do grupo via `@Bothierry` + IA |
@@ -199,6 +201,7 @@ Tudo em arquivos na pasta do projeto, **na VM** (a maioria está no `.gitignore`
 | `metrics.jsonl` | métricas do painel, 30 dias de retenção | não |
 | `events.json` | eventos, confirmados e ausentes | não |
 | `birthdays.json`, `apelidos.txt` | aniversariantes e apelidos | não |
+| `birthday_links.json` | ligações aniversariante → membro feitas no painel (admin) | não |
 | `scheduled_messages.json` | mensagens agendadas pontuais | não |
 | `audios/` | áudios tocáveis (`!nome`), `repetido.mp3` do aviso de link repetido | não |
 | `regras/`, `regulamento.txt`, `megasena.txt` | regras e textos fixos | não |
@@ -223,7 +226,7 @@ Todas dentro do processo do bot (`node-cron`, fuso `America/Sao_Paulo`, tolerân
 | 03:30 | troca a foto do bot se o tema mudou; sincroniza fotos de perfil |
 | 08:00 (seg–sex) | bom dia + feriado nacional + **cartão de previsão do tempo** (imagem; se falhar, vai em texto) |
 | 08:00 (seg e qua) | atualiza a foto do grupo com a notícia do dia (via IA) |
-| 09:00 | aviso de aniversariantes + renomeia o grupo |
+| 09:00 | aviso de aniversariantes (**cartão em imagem** com a foto; texto se falhar) + renomeia o grupo |
 | 18:00 (seg–sex) | ranking do expediente (08h–18h) |
 | 18:05 (sexta) | ranking semanal |
 | **22:30 (todo dia)** | **propaganda (#ad)**: banner + legenda (`AD_HOUR`/`AD_MINUTE`/`AD_DAYS` em `index.js`) |
@@ -288,10 +291,10 @@ A sessão é um cookie assinado com HMAC (30 dias), com o papel dentro da assina
 - **Membros** — todos do grupo, **ordenados pelo ranking de hoje** (quem não falou fica por último), com busca; clicar abre os detalhes da pessoa (pódio, horário preferido, últimos 14 dias).
 - **Comandos** — menu de todos os comandos, aniversariantes cadastrados e áudios salvos (o admin vê o ✕ pra apagar).
 - **Eventos** — próximos eventos com confirmados/ausentes, um nome por linha, e botões Vou / Não vou (para *member*). Quem entra pelo link do `!painel` já abre nesta aba.
-- **Sistema** — status, uptime, quedas, memória, eventos de conexão, erros, comandos mais usados, crons; o admin vê **Ações** (reiniciar o bot e ver logs).
+- **Sistema** — status, uptime, quedas, memória, eventos de conexão, erros, comandos mais usados, crons; o admin vê também **Ações** (reiniciar o bot e ver logs) e **Aniversariantes e fotos** (escolhe qual membro é cada aniversariante, pra foto sair no cartão; "automático" só vale quando o nome bate com uma pessoa só).
 - **Servidor** — CPU, memória e disco da VM, com histórico.
 
-**Rotas da API** (todas atrás do login): `/api/metrics`, `/api/messages-per-hour`, `/api/ranking`, `/api/ranking-full`, `/api/trend`, `/api/heatmap`, `/api/members`, `/api/member`, `/api/commands`, `/api/events`, `/api/events/rsvp` (member), `/api/me`, `/api/system`, `/api/system-history`; **admin**: `/api/audios/delete`, `/api/restart`, `/api/logs`. Mais `/login`, `/logout`, `/entrar` (link do `!painel`), `/avatar` e `/bot-photo.png`.
+**Rotas da API** (todas atrás do login): `/api/metrics`, `/api/messages-per-hour`, `/api/ranking`, `/api/ranking-full`, `/api/trend`, `/api/heatmap`, `/api/members`, `/api/member`, `/api/commands`, `/api/events`, `/api/events/rsvp` (member), `/api/me`, `/api/system`, `/api/system-history`; **admin**: `/api/audios/delete`, `/api/restart`, `/api/logs`, `/api/admin/birthday-links`. Mais `/login`, `/logout`, `/entrar` (link do `!painel`), `/avatar` e `/bot-photo.png`.
 
 **Fotos de perfil:** o bot busca a foto de cada pessoa no WhatsApp e guarda em `avatars/`. Se a privacidade da pessoa bloqueia (`not-authorized`), o painel mostra as iniciais. Pra associar uma foto na mão: `node scripts/set-avatar.js "Nome Da Pessoa" caminho/foto.jpg`.
 
@@ -320,6 +323,7 @@ Use `!` ou `/` no começo. `!menu` lista tudo no próprio WhatsApp (e a aba **Co
 | `!policiafederal` · `!otario` | zoeiras |
 | `!testarpropaganda` *(oculto)* | manda a propaganda só no grupo onde for digitado |
 | `!testarbomdia` *(oculto)* | manda o bom dia (com o cartão de previsão) só no grupo onde for digitado |
+| `!testaraniversario [nome]` *(oculto)* | manda o cartão de aniversário só no grupo onde for digitado (do nome informado, ou do próximo aniversariante) |
 
 **Perguntar dados do grupo:** mencione **@Bothierry** com uma pergunta ("quantas vezes o Fulano ficou no top 3?"). A IA só escolhe entre consultas reais nos dados, nunca inventa. Apelidos em `apelidos.txt` (`Nome Completo;apelido1;apelido2`).
 
@@ -332,7 +336,7 @@ Use `!` ou `/` no começo. `!menu` lista tudo no próprio WhatsApp (e a aba **Co
 - **Regras do grupo** (`regras/*.txt`): frases-gatilho cadastradas disparam a intervenção; a **Regra 93 (iPhone)** usa IA pra julgar o tom.
 - **Insulto ao bot** (mencionando @Bothierry): a IA classifica — 1º e 2º viram aviso, o **3º resulta em remoção do grupo** (ação real e irreversível pelo bot).
 - **Marcos do dia:** avisa quando alguém bate exatamente 50 ou 100 mensagens.
-- **Aniversários:** renomeia o grupo pra `🎉 Parabéns, Nome! 🎂` às 9h e volta ao nome que ele tinha antes na meia-noite (precisa ser admin do grupo).
+- **Aniversários:** manda um **cartão com a foto** do aniversariante (resolução cheia do WhatsApp; se a privacidade bloquear, usa a do cache ou a inicial do nome) e renomeia o grupo pra `🎉 Parabéns, Nome! 🎂` às 9h e volta ao nome que ele tinha antes na meia-noite (precisa ser admin do grupo).
 - **Foto temática do bot** em datas comemorativas (Natal, Ano Novo, Halloween, Carnaval, Páscoa, Festa Junina), com imagens de `avatarbot/`.
 - **Propaganda (#ad)** diária às 22:30.
 

@@ -17,8 +17,8 @@ async function getSharp() {
   if (!sharpModule) sharpModule = (await import('sharp')).default;
   return sharpModule;
 }
-import { logMessage, getDailyCounts, getCountsSince, getCountsBetween, getMessagesSince, extractUrls, wasUrlSentSince, loadSeenMessageIds, archiveOldMessages, getRecentSenderJids, getMainGroupJid } from './db.js';
-import { syncAvatars } from './avatars.js';
+import { logMessage, getDailyCounts, getCountsSince, getCountsBetween, getMessagesSince, extractUrls, wasUrlSentSince, loadSeenMessageIds, archiveOldMessages, getRecentSenderJids, getMainGroupJid, getMemberList } from './db.js';
+import { syncAvatars, getAvatarPath } from './avatars.js';
 import {
   loadBirthdays,
   getBirthdaysToday,
@@ -39,6 +39,8 @@ import { recordConnectionEvent, recordMessage, recordCommandUsage, recordCronRun
 import { startDashboardServer, createLoginToken } from './dashboard.js';
 import { getWeatherData, formatWeatherBlock } from './weather.js';
 import { renderWeatherCard } from './weatherCard.js';
+import { renderBirthdayCard, photoToDataUri } from './birthdayCard.js';
+import { resolveBirthdayMember, normalizeName } from './birthdayLinks.js';
 import { getPresidentSummary, getUrnasApuradasPorRegiao } from './elections.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -959,6 +961,7 @@ const commands = {
   testareleicao: commandTestarEleicao,
   testarpropaganda: commandTestarPropaganda,
   testarbomdia: commandTestarBomDia,
+  testaraniversario: commandTestarAniversario,
   testarfotopresidente: commandTestarFotoPresidente,
   testarresultadoeleicao: commandTestarResultadoEleicao,
   otario: commandOtario,
@@ -1051,6 +1054,68 @@ async function syncGroupNameForBirthdays(sock) {
 // Manda o aviso de texto de aniversario no grupo, no maximo uma vez por dia
 // (controlado por birthday_state.json). O nome do grupo e tratado a parte,
 // por syncGroupNameForBirthdays — essa funcao so cuida da mensagem.
+// Foto do aniversariante: tenta a de resolucao cheia direto do WhatsApp (o
+// cache do painel e pequeno, 128px, e borra num cartao grande); se a privacidade
+// bloquear ou falhar, usa a do cache; sem nenhuma, o cartao usa a inicial.
+async function getBirthdayPhotoBuffer(sock, jid) {
+  try {
+    const url = await sock.profilePictureUrl(jid, 'image');
+    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (res.ok) return Buffer.from(await res.arrayBuffer());
+  } catch {
+    // sem foto / privacidade — cai no cache
+  }
+  try {
+    const cached = fs.readFileSync(getAvatarPath(jid));
+    if (cached.length > 0) return cached;
+  } catch {
+    // sem cache
+  }
+  return null;
+}
+
+// Monta o cartao de aniversario pra uma lista de pessoas { name, day, month }
+// do mesmo dia. Lanca erro se nao der pra desenhar (quem chama cai no texto).
+async function buildBirthdayCard(sock, people) {
+  const groupJid = getMainGroupJid();
+  const members = groupJid ? getMemberList(groupJid) : [];
+  const cardPeople = [];
+  for (const person of people) {
+    const match = resolveBirthdayMember(person, members);
+    let photoUri = null;
+    if (match) {
+      try {
+        const buffer = await getBirthdayPhotoBuffer(sock, match.jid);
+        if (buffer) photoUri = await photoToDataUri(buffer);
+      } catch (err) {
+        console.error(`Erro ao preparar a foto de ${person.name} pro cartao de aniversario:`, err);
+      }
+    }
+    cardPeople.push({ name: person.name, photoUri });
+  }
+  return renderBirthdayCard(cardPeople, people[0].day, people[0].month);
+}
+
+function birthdayCaption(people) {
+  const names = people.map((p) => `*${p.name}*`);
+  const joined = names.length > 1 ? `${names.slice(0, -1).join(', ')} e ${names[names.length - 1]}` : names[0];
+  return `🎉🎂 Hoje é aniversário de ${joined}! Parabéns! 🎉🎂`;
+}
+
+// Manda o aviso de aniversario num grupo: cartao em imagem com a legenda; se o
+// cartao nao puder ser gerado, manda so o texto (como era antes).
+async function sendBirthdayToGroup(sock, groupJid, people) {
+  const caption = birthdayCaption(people);
+  let image = null;
+  try {
+    image = await buildBirthdayCard(sock, people);
+  } catch (err) {
+    console.error('Erro ao montar o cartao de aniversario (mandando em texto):', err);
+  }
+  const sent = await sock.sendMessage(groupJid, image ? { image, caption } : { text: caption });
+  if (sent?.key?.id) sentByBot.add(sent.key.id);
+}
+
 async function checkAndSendBirthdays(sock) {
   const todayKey = getBrasiliaNow().date;
   if (getLastBirthdayCheckDate() === todayKey) return;
@@ -1058,6 +1123,8 @@ async function checkAndSendBirthdays(sock) {
   const todaysBirthdays = getBirthdaysToday();
   let allGroupJids = null; // cache: so busca se precisar (aniversariante sem groupJid definido)
 
+  // Um cartao por grupo, juntando quem faz aniversario no mesmo dia.
+  const peopleByGroup = new Map();
   for (const person of todaysBirthdays) {
     let targetJids = person.groupJid ? [person.groupJid] : null;
     if (!targetJids) {
@@ -1067,17 +1134,40 @@ async function checkAndSendBirthdays(sock) {
       }
       targetJids = allGroupJids;
     }
-
     for (const groupJid of targetJids) {
-      try {
-        await sock.sendMessage(groupJid, { text: `🎉🎂 Hoje é aniversário de *${person.name}*! Parabéns! 🎉🎂` });
-      } catch (err) {
-        console.error(`Erro ao enviar aviso de aniversario de ${person.name} para ${groupJid}:`, err);
-      }
+      if (!peopleByGroup.has(groupJid)) peopleByGroup.set(groupJid, []);
+      peopleByGroup.get(groupJid).push(person);
+    }
+  }
+
+  for (const [groupJid, people] of peopleByGroup) {
+    try {
+      await sendBirthdayToGroup(sock, groupJid, people);
+    } catch (err) {
+      console.error(`Erro ao enviar aviso de aniversario (${people.map((p) => p.name).join(', ')}) para ${groupJid}:`, err);
     }
   }
 
   setLastBirthdayCheckDate(todayKey);
+}
+
+// !testaraniversario [nome] — manda o cartao so no grupo onde foi digitado, pra
+// ver como fica: usa o aniversariante com esse nome, ou o proximo da lista.
+async function commandTestarAniversario({ sock, groupJid, args }) {
+  const all = loadBirthdays();
+  if (all.length === 0) return sock.sendMessage(groupJid, { text: 'Nenhum aniversariante cadastrado.' });
+
+  const query = normalizeName(args);
+  let person = query ? all.find((b) => normalizeName(b.name).includes(query)) : null;
+  if (query && !person) return sock.sendMessage(groupJid, { text: `Não achei "${args}" na lista de aniversariantes.` });
+  if (!person) {
+    const today = getBrasiliaNow().date; // YYYY-MM-DD
+    const todayKey = Number(today.slice(5, 7)) * 100 + Number(today.slice(8, 10));
+    const keyOf = (b) => b.month * 100 + b.day;
+    person = [...all].sort((a, b) => keyOf(a) - keyOf(b)).find((b) => keyOf(b) >= todayKey) || [...all].sort((a, b) => keyOf(a) - keyOf(b))[0];
+  }
+  const sameDay = all.filter((b) => b.day === person.day && b.month === person.month);
+  return sendBirthdayToGroup(sock, groupJid, query ? [person] : sameDay);
 }
 
 // Mensagem automatica das 8h, mandada em todos os grupos que o bot participa.
