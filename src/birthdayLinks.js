@@ -124,3 +124,15 @@ export function suggestBirthdayMembers(person, members, limit = 3) {
     .slice(0, limit)
     .map((x) => ({ jid: x.m.jid, name: formatDisplayName(x.m.name) }));
 }
+
+/**
+ * Nome que o sistema usa pra um aniversariante: o MESMO nome de exibicao do
+ * membro no ranking/painel (ex.: "Lucas Souza", nao o apelido "Lucas") quando
+ * ele esta ligado a um membro; sem ligacao (ex.: quem nao esta no grupo), o
+ * nome como esta em birthdays.json.
+ */
+export function birthdayDisplayName(person, members) {
+  const match = resolveBirthdayMember(person, members);
+  const member = match ? members.find((m) => m.jid === match.jid) : null;
+  return member ? formatDisplayName(member.name) : person.name;
+}

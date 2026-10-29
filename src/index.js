@@ -40,7 +40,8 @@ import { startDashboardServer, createLoginToken } from './dashboard.js';
 import { getWeatherData, formatWeatherBlock } from './weather.js';
 import { renderWeatherCard } from './weatherCard.js';
 import { renderBirthdayCard, photoToDataUri } from './birthdayCard.js';
-import { resolveBirthdayMember, normalizeName } from './birthdayLinks.js';
+import { formatDisplayName } from './displayNames.js';
+import { resolveBirthdayMember, birthdayDisplayName, normalizeName } from './birthdayLinks.js';
 import { readBirthdayPhoto } from './birthdayPhotos.js';
 import { getPresidentSummary, getUrnasApuradasPorRegiao } from './elections.js';
 
@@ -198,7 +199,7 @@ async function commandRanking({ sock, groupJid }) {
 
   const lines = counts.map((c, i) => {
     const percent = Math.round((c.total / totalMessages) * 100);
-    return `${i + 1}. ${c.sender_name}: ${c.total} msgs (${percent}%)`;
+    return `${i + 1}. ${formatDisplayName(c.sender_name)}: ${c.total} msgs (${percent}%)`;
   });
 
   return sock.sendMessage(groupJid, {
@@ -425,7 +426,7 @@ async function commandResumo({ sock, groupJid }) {
   }
 
   const transcript = recentMessages
-    .map((m) => `${m.senderName}: ${m.text}`)
+    .map((m) => `${formatDisplayName(m.senderName)}: ${m.text}`)
     .join('\n')
     .slice(-MAX_TRANSCRIPT_CHARS); // fica com o final (mensagens mais recentes) se passar do limite
 
@@ -672,12 +673,12 @@ async function commandEventos({ sock, groupJid }) {
     }
     if (e.attendees?.length) {
       lines.push(`Confirmados (${e.attendees.length}):`);
-      e.attendees.forEach((a, idx) => lines.push(`${idx + 1}. ${a.name}`));
+      e.attendees.forEach((a, idx) => lines.push(`${idx + 1}. ${formatDisplayName(a.name)}`));
     }
     if (e.absentees?.length) {
       if (e.attendees?.length) lines.push('----');
       lines.push(`Ausentes (${e.absentees.length}):`);
-      e.absentees.forEach((a, idx) => lines.push(`${idx + 1}. ${a.name}`));
+      e.absentees.forEach((a, idx) => lines.push(`${idx + 1}. ${formatDisplayName(a.name)}`));
     }
     const block = lines.join('\n');
     return sorted.length > 1 ? `*EVENTO ${i + 1}*\n\n${block}` : block;
@@ -833,7 +834,7 @@ async function commandVou(ctx) {
   return handleAttendanceCommand(ctx, {
     commandName: 'vou',
     storeFn: addAttendee,
-    successText: (event, senderName) => `✅ ${senderName} confirmado(a) em *${event.title}*!`,
+    successText: (event, senderName) => `✅ ${formatDisplayName(senderName)} confirmado(a) em *${event.title}*!`,
   });
 }
 
@@ -841,7 +842,7 @@ async function commandNaoVou(ctx) {
   return handleAttendanceCommand(ctx, {
     commandName: 'naovou',
     storeFn: addAbsentee,
-    successText: (event, senderName) => `❌ ${senderName} marcado(a) como ausente em *${event.title}*.`,
+    successText: (event, senderName) => `❌ ${formatDisplayName(senderName)} marcado(a) como ausente em *${event.title}*.`,
   });
 }
 
@@ -870,13 +871,20 @@ async function commandPainel({ sock, groupJid, senderJid, senderName }) {
   }
 }
 
+// Membros do grupo principal (pra achar o nome de exibicao de cada aniversariante).
+function getBirthdayMembers() {
+  const groupJid = getMainGroupJid();
+  return groupJid ? getMemberList(groupJid) : [];
+}
+
 async function commandAniversariantes({ sock, groupJid }) {
   const all = loadBirthdays();
   if (all.length === 0) {
     return sock.sendMessage(groupJid, { text: 'Nenhum aniversariante cadastrado ainda (edite o arquivo birthdays.json).' });
   }
   const sorted = [...all].sort((a, b) => a.month - b.month || a.day - b.day);
-  const lines = sorted.map((b) => `${String(b.day).padStart(2, '0')}/${String(b.month).padStart(2, '0')} — ${b.name}`);
+  const members = getBirthdayMembers();
+  const lines = sorted.map((b) => `${String(b.day).padStart(2, '0')}/${String(b.month).padStart(2, '0')} — ${birthdayDisplayName(b, members)}`);
   return sock.sendMessage(groupJid, { text: `🎂 Aniversariantes cadastrados:\n\n${lines.join('\n')}` });
 }
 
@@ -1032,7 +1040,7 @@ async function syncGroupNameForBirthdays(sock) {
 
     for (const groupJid of targetJids) {
       if (!namesByGroup.has(groupJid)) namesByGroup.set(groupJid, []);
-      namesByGroup.get(groupJid).push(person.name);
+      namesByGroup.get(groupJid).push(birthdayDisplayName(person, getBirthdayMembers()));
     }
   }
 
@@ -1077,9 +1085,7 @@ async function getBirthdayPhotoBuffer(sock, jid) {
 
 // Monta o cartao de aniversario pra uma lista de pessoas { name, day, month }
 // do mesmo dia. Lanca erro se nao der pra desenhar (quem chama cai no texto).
-async function buildBirthdayCard(sock, people) {
-  const groupJid = getMainGroupJid();
-  const members = groupJid ? getMemberList(groupJid) : [];
+async function buildBirthdayCard(sock, people, members = getBirthdayMembers()) {
   const cardPeople = [];
   for (const person of people) {
     // Foto enviada na mao pelo painel vence a do WhatsApp.
@@ -1092,24 +1098,27 @@ async function buildBirthdayCard(sock, people) {
     } catch (err) {
       console.error(`Erro ao preparar a foto de ${person.name} pro cartao de aniversario:`, err);
     }
-    cardPeople.push({ name: person.name, photoUri });
+    cardPeople.push({ name: person.display || person.name, photoUri });
   }
   return renderBirthdayCard(cardPeople, people[0].day, people[0].month);
 }
 
 function birthdayCaption(people) {
-  const names = people.map((p) => `*${p.name}*`);
+  const names = people.map((p) => `*${p.display || p.name}*`);
   const joined = names.length > 1 ? `${names.slice(0, -1).join(', ')} e ${names[names.length - 1]}` : names[0];
   return `🎉🎂 Hoje é aniversário de ${joined}! Parabéns! 🎉🎂`;
 }
 
 // Manda o aviso de aniversario num grupo: cartao em imagem com a legenda; se o
 // cartao nao puder ser gerado, manda so o texto (como era antes).
-async function sendBirthdayToGroup(sock, groupJid, people) {
+async function sendBirthdayToGroup(sock, groupJid, rawPeople) {
+  // "name" continua sendo o da lista (pra achar foto/ligacao); "display" e o nome padronizado que sai no texto.
+  const members = getBirthdayMembers();
+  const people = rawPeople.map((p) => ({ ...p, display: birthdayDisplayName(p, members) }));
   const caption = birthdayCaption(people);
   let image = null;
   try {
-    image = await buildBirthdayCard(sock, people);
+    image = await buildBirthdayCard(sock, people, members);
   } catch (err) {
     console.error('Erro ao montar o cartao de aniversario (mandando em texto):', err);
   }
@@ -1273,7 +1282,7 @@ async function sendEndOfDayMessage(sock) {
       lines.push('', '📊 Ranking do dia:', '');
       counts.forEach((c, i) => {
         const percent = Math.round((c.total / totalMessages) * 100);
-        lines.push(`${i + 1}. ${c.sender_name}: ${c.total} msgs (${percent}%)`);
+        lines.push(`${i + 1}. ${formatDisplayName(c.sender_name)}: ${c.total} msgs (${percent}%)`);
       });
       lines.push('', `total de ${totalMessages} Mensagens! 😅`);
     }
@@ -1609,7 +1618,7 @@ async function sendWeeklyRanking(sock) {
       lines.push('', '📊 Ranking:', '');
       counts.forEach((c, i) => {
         const percent = totalMessages > 0 ? Math.round((c.total / totalMessages) * 100) : 0;
-        lines.push(`${i + 1}. ${c.sender_name}: ${c.total} msgs (${percent}%)`);
+        lines.push(`${i + 1}. ${formatDisplayName(c.sender_name)}: ${c.total} msgs (${percent}%)`);
       });
       lines.push('', `total de ${totalMessages} Mensagens na semana! 📈`);
     }
