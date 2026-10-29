@@ -452,9 +452,9 @@ const DASHBOARD_HTML = `<!doctype html>
       <button class="tab-btn active" data-tab="overview">Visão geral</button>
       <button class="tab-btn" data-tab="activity">Atividade</button>
       <button class="tab-btn" data-tab="members">Membros</button>
+      <button class="tab-btn" data-tab="menu">Comandos</button>
       <button class="tab-btn" data-tab="system">Sistema</button>
       <button class="tab-btn" data-tab="server">Servidor</button>
-      <button class="tab-btn" data-tab="menu">Menu</button>
     </div>
 
     <div class="header-status">
