@@ -6,7 +6,7 @@ import path from 'path';
 import { getDashboardData, getMessagesPerHourForDate, getSystemStats, getSystemStatsHistory } from './metrics.js';
 import { getCountsBetween, getMainGroupJid, getMessageTrend, getActivityHeatmap, getTopSenderPerHour, getMemberList, getMemberStats } from './db.js';
 import { loadBirthdays } from './birthdays.js';
-import { resolveBirthdayMember, setBirthdayLink, normalizeName } from './birthdayLinks.js';
+import { resolveBirthdayMember, suggestBirthdayMembers, setBirthdayLink, normalizeName } from './birthdayLinks.js';
 import { BOT_PHOTO_PATH } from './groupPhoto.js';
 import { formatDisplayName } from './displayNames.js';
 import { getAvatarPath } from './avatars.js';
@@ -1478,7 +1478,9 @@ async function loadBdayAdmin() {
       const photo = b.jid ? avatarImg(b.jid, b.name, 'avatar-mini') : '';
       return '<div class="bday-row">' + photo +
         '<div class="who">' + escapeHtml(b.name) + '<small>' + pad(b.day) + '/' + pad(b.month) + '</small></div>' + tag +
-        '<select data-idx="' + i + '">' + options + '</select></div>';
+        '<select data-idx="' + i + '">' + options + '</select>' +
+        (b.suggestions || []).map((m) => '<button class="action-btn bday-suggest" data-idx="' + i + '" data-jid="' + escapeHtml(m.jid) + '">Usar ' + escapeHtml(m.name) + '</button>').join('') +
+        '</div>';
     }).join('');
     box.dataset.names = JSON.stringify(data.birthdays.map((b) => b.name));
   } catch {
@@ -1486,15 +1488,13 @@ async function loadBdayAdmin() {
   }
 }
 
-document.getElementById('bdayLinks').addEventListener('change', async (e) => {
-  const sel = e.target.closest('select');
-  if (!sel) return;
+async function saveBdayLink(idx, jid) {
   const names = JSON.parse(document.getElementById('bdayLinks').dataset.names || '[]');
   try {
     const res = await fetch('/api/admin/birthday-links', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'panel' },
-      body: JSON.stringify({ name: names[Number(sel.dataset.idx)], jid: sel.value || null }),
+      body: JSON.stringify({ name: names[Number(idx)], jid: jid || null }),
     });
     const data = await res.json();
     if (!data.ok) alert('Não salvou: ' + (data.error || 'erro'));
@@ -1502,6 +1502,16 @@ document.getElementById('bdayLinks').addEventListener('change', async (e) => {
   } catch {
     alert('Não consegui falar com o bot. Tenta de novo.');
   }
+}
+
+document.getElementById('bdayLinks').addEventListener('click', (e) => {
+  const btn = e.target.closest('.bday-suggest');
+  if (btn) saveBdayLink(btn.dataset.idx, btn.dataset.jid);
+});
+
+document.getElementById('bdayLinks').addEventListener('change', async (e) => {
+  const sel = e.target.closest('select');
+  if (sel) saveBdayLink(sel.dataset.idx, sel.value);
 });
 
 let eventsMe = null;
@@ -2099,7 +2109,10 @@ export function startDashboardServer(
         .sort((a, b) => a.month - b.month || a.day - b.day)
         .map((b) => {
           const match = resolveBirthdayMember(b, members);
-          return { name: b.name, day: b.day, month: b.month, jid: match?.jid || null, source: match?.source || null };
+          return {
+            name: b.name, day: b.day, month: b.month, jid: match?.jid || null, source: match?.source || null,
+            suggestions: match ? [] : suggestBirthdayMembers(b, members),
+          };
         });
       sendJson(res, 200, {
         birthdays,

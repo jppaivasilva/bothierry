@@ -169,7 +169,7 @@ Tudo em `src/` (JavaScript, módulos ES):
 | `events.js` | Eventos e presença (`events.json`) |
 | `birthdays.js` | Aniversariantes e controle de renomear o grupo |
 | `birthdayCard.js` | Desenha o **cartão de aniversário** (estilo "festa escura", foto + confete) em SVG → PNG |
-| `birthdayLinks.js` | Liga cada aniversariante ao membro do grupo (pra achar a foto): ligação manual do painel ou automática pelo nome/apelido |
+| `birthdayLinks.js` | De/para aniversariante → membro do grupo (foto do cartão e da lista): ligação manual do painel, ou automática por nome/apelido (`apelidos.txt`) quando só uma pessoa bate; sugere candidatos nos demais |
 | `scheduled.js` | Mensagens agendadas pontuais (`scheduled_messages.json`) |
 | `rules.js` | Regras do grupo (`regras/*.txt`) |
 | `dataQuestions.js` | Perguntas sobre dados do grupo via `@Bothierry` + IA |
@@ -291,7 +291,7 @@ A sessão é um cookie assinado com HMAC (30 dias), com o papel dentro da assina
 - **Membros** — todos do grupo, **ordenados pelo ranking de hoje** (quem não falou fica por último), com busca; clicar abre os detalhes da pessoa (pódio, horário preferido, últimos 14 dias).
 - **Comandos** — menu de todos os comandos, aniversariantes cadastrados e áudios salvos (o admin vê o ✕ pra apagar).
 - **Eventos** — próximos eventos com confirmados/ausentes, um nome por linha, e botões Vou / Não vou (para *member*). Quem entra pelo link do `!painel` já abre nesta aba.
-- **Sistema** — status, uptime, quedas, memória, eventos de conexão, erros, comandos mais usados, crons; o admin vê também **Ações** (reiniciar o bot e ver logs) e **Aniversariantes e fotos** (escolhe qual membro é cada aniversariante, pra foto sair no cartão; "automático" só vale quando o nome bate com uma pessoa só).
+- **Sistema** — status, uptime, quedas, memória, eventos de conexão, erros, comandos mais usados, crons; o admin vê também **Ações** (reiniciar o bot e ver logs) e **Aniversariantes e fotos** (escolhe qual membro é cada aniversariante, pra foto sair no cartão; "automático" liga sozinho só quando o nome — ou o apelido de `apelidos.txt` — bate com **uma** pessoa só: nome igual, ou um nome contendo o outro, como "Lucas" → Lucas Souza; senão fica "sem foto", e o painel **sugere** candidatos pra ligar com um toque).
 - **Servidor** — CPU, memória e disco da VM, com histórico.
 
 **Rotas da API** (todas atrás do login): `/api/metrics`, `/api/messages-per-hour`, `/api/ranking`, `/api/ranking-full`, `/api/trend`, `/api/heatmap`, `/api/members`, `/api/member`, `/api/commands`, `/api/events`, `/api/events/rsvp` (member), `/api/me`, `/api/system`, `/api/system-history`; **admin**: `/api/audios/delete`, `/api/restart`, `/api/logs`, `/api/admin/birthday-links`. Mais `/login`, `/logout`, `/entrar` (link do `!painel`), `/avatar` e `/bot-photo.png`.
