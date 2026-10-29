@@ -397,7 +397,11 @@ const DASHBOARD_HTML = `<!doctype html>
   .tab-panel.active { display: block; }
 
   /* Aba Membros */
-  .menu-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+  /* Colunas estilo "mural": cada card tem a altura do proprio conteudo (antes, a
+     grade esticava todos pra altura do maior da linha e um card pequeno ficava
+     enorme e vazio). */
+  .menu-grid { column-width: 320px; column-gap: 14px; }
+  .menu-grid > .card, .menu-grid > .member-empty { break-inside: avoid; margin-bottom: 14px; }
   .menu-title { font-size: 15px; font-weight: 700; color: var(--text-primary); margin-bottom: 12px; }
   .menu-item { padding: 8px 0; border-top: 1px solid rgba(60,60,67,.08); }
   .menu-item:first-of-type { border-top: none; }

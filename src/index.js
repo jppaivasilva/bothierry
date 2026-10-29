@@ -882,8 +882,12 @@ async function commandAniversariantes({ sock, groupJid }) {
 const COMMAND_CATEGORIES = [
   {
     emoji: '📊',
-    title: 'Ranking',
-    commands: [{ name: 'ranking', description: 'ranking de mensagens de hoje, com percentual e total' }],
+    title: 'Ranking e regras',
+    commands: [
+      { name: 'ranking', description: 'ranking de mensagens de hoje, com percentual e total' },
+      { name: 'regras', description: 'lista as regras do grupo' },
+      { name: 'regulamento', description: 'mostra o manifesto oficial do grupo' },
+    ],
   },
   {
     emoji: '🎉',
@@ -925,14 +929,6 @@ const COMMAND_CATEGORIES = [
     commands: [
       { name: 'audios', description: 'lista de áudios disponíveis' },
       { name: 'salvaraudio', description: 'salva um áudio — responda o áudio com !salvaraudio nome' },
-    ],
-  },
-  {
-    emoji: '📜',
-    title: 'Regras',
-    commands: [
-      { name: 'regras', description: 'lista as regras do grupo' },
-      { name: 'regulamento', description: 'mostra o manifesto oficial do grupo' },
     ],
   },
 ];
