@@ -227,6 +227,7 @@ A IA só escolhe entre consultas reais nos dados (nunca inventa). Precisa de `OP
 
 - **`!meme <nome>`**: template de meme popular (API do Imgflip, sem legenda).
 - **`!audios`**: lista áudios tocáveis — qualquer arquivo em `audios/` vira comando `!nome-do-arquivo` automaticamente.
+- **`!painel`**: o bot manda no **privado** de quem pediu um link de uso único (vale 5 minutos) que entra no painel já identificado pelo WhatsApp. Na aba *Eventos* a pessoa marca **Vou** / **Não vou**, e isso aparece no `!eventos`. Sem senha e sem cadastro de telefone. Se o bot não conseguir mandar no privado, ele avisa no grupo.
 - **`!salvaraudio nome`**: responda a um áudio do grupo com isso pra salvar ele em `audios/` com o nome escolhido; depois qualquer um chama com `!nome`. Não sobrescreve comandos nem áudios existentes.
 - **`!schedule`**: lista mensagens agendadas pendentes (editar `scheduled_messages.json`).
 - **`!policiafederal`**: nota de esclarecimento de zoeira.
