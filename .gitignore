@@ -21,3 +21,5 @@ megasena.txt
 .env
 *.jsonl.bak
 .claude/
+.deploy_failed_sha
+deploy.log

@@ -31,12 +31,29 @@ pm2 logs Bothierry --lines 50   # ver os últimos logs
 pm2 restart Bothierry           # reiniciar (precisa depois de qualquer mudança de código)
 ```
 
-**Como aplicar uma mudança de código:** não tem `git push` configurado — o deploy é manual, copiando os arquivos alterados via `scp` e reiniciando:
+**Como aplicar uma mudança de código (deploy automático):** a VM verifica o GitHub a cada 3 minutos (cron rodando `deploy.sh`). Quando a branch `main` tem commit novo, ela baixa, valida a sintaxe de todos os `.js` e reinicia o bot no PM2. Se a validação falhar, volta pro commit anterior e **não** reinicia — o bot continua no ar com o código antigo. Ou seja: depois do merge na `main`, é só esperar uns minutos.
+
+Acompanhar / forçar:
+```bash
+tail -20 ~/bothierry/deploy.log      # histórico dos deploys (e erros)
+~/bothierry/deploy.sh                # roda na hora, sem esperar o cron
+```
+
+Instalação (uma vez só, na VM) — baixa o repositório por cima da pasta atual (os arquivos locais de dados, `.env`, `audios/`, `auth_info/` etc. não são tocados, estão no `.gitignore`), guarda um backup do `src/` e agenda o cron:
+```bash
+cd ~/bothierry && cp -r src ~/src-backup-$(date +%F) \
+  && git init -q -b main && git remote add origin https://github.com/jppaivasilva/bothierry.git \
+  && git fetch -q origin main && git reset -q --hard origin/main && chmod +x deploy.sh \
+  && (crontab -l 2>/dev/null | grep -v deploy.sh; echo '*/3 * * * * flock -n /tmp/bothierry-deploy.lock /home/ubuntu/bothierry/deploy.sh >> /home/ubuntu/bothierry/deploy.log 2>&1') | crontab - \
+  && pm2 restart Bothierry
+```
+O repositório é público, então a VM baixa sem senha nem chave. Se um dia ele ficar privado, será preciso uma chave de deploy (Deploy key) no GitHub.
+
+Deploy manual (plano B, se o automático estiver quebrado): copiar o arquivo com `scp` e reiniciar:
 ```bash
 scp -i <chave> src/index.js ubuntu@163.176.180.33:/home/ubuntu/bothierry/src/index.js
 ssh -i <chave> ubuntu@163.176.180.33 "cd ~/bothierry && node --check src/index.js && pm2 restart Bothierry"
 ```
-(sempre rode `node --check` antes do restart, pra não derrubar o bot com um erro de sintaxe)
 
 **Autostart:** o PM2 está configurado (`pm2 startup` + `pm2 save`) pra subir o bot sozinho se a VM reiniciar.
 
