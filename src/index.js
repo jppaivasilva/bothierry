@@ -17,7 +17,7 @@ async function getSharp() {
   if (!sharpModule) sharpModule = (await import('sharp')).default;
   return sharpModule;
 }
-import { logMessage, getDailyCounts, getCountsSince, getCountsBetween, getMessagesSince, extractUrls, wasUrlSentSince, loadSeenMessageIds, archiveOldMessages, getRecentSenderJids, getMainGroupJid, getMemberList } from './db.js';
+import { logMessage, getDailyCounts, getCountsSince, getCountsBetween, getMessagesSince, extractUrls, wasUrlSentSince, loadSeenMessageIds, archiveOldMessages, getRecentSenderJids, getMainGroupJid } from './db.js';
 import { syncAvatars, getAvatarPath } from './avatars.js';
 import {
   loadBirthdays,
@@ -29,10 +29,10 @@ import {
   getLastGroupNameSyncDate,
   setLastGroupNameSyncDate,
 } from './birthdays.js';
-import { getNextUnseenNews, getRecentHeadlines } from './news.js';
+import { getRecentHeadlines } from './news.js';
 import { pickMostImpactfulHeadline, editBotPhoto } from './groupPhoto.js';
 import { loadEvents, addEvent, eventTitleExists, findUpcomingEvents, addAttendee, addAbsentee } from './events.js';
-import { loadScheduledMessages, getDueMessages, markScheduledMessageSent } from './scheduled.js';
+import { getDueMessages, markScheduledMessageSent } from './scheduled.js';
 import { loadRules, findMatchingRule } from './rules.js';
 import { answerDataQuestion } from './dataQuestions.js';
 import { recordConnectionEvent, recordMessage, recordCommandUsage, recordCronRun, recordError, pruneOldMetrics, recordSystemStats } from './metrics.js';
@@ -217,54 +217,6 @@ async function commandMenu({ sock, groupJid }) {
     return `${cat.emoji} *${cat.title}*\n${commandLines}`;
   });
   return sock.sendMessage(groupJid, { text: `🤖 *Menu de Comandos disponíveis*\n\n${blocks.join('\n\n')}` });
-}
-
-async function commandNews({ sock, groupJid }) {
-  try {
-    const news = await getNextUnseenNews();
-    if (!news) {
-      return sock.sendMessage(groupJid, { text: 'Sem notícia nova no feed do G1 no momento (as recentes já foram enviadas aqui), tenta de novo mais tarde.' });
-    }
-
-    const text = news.subtitle
-      ? `📰 *${news.title}*\n\n${news.subtitle}\n\n🔗 ${news.link}`
-      : `📰 *${news.title}*\n\n🔗 ${news.link}`;
-
-    return sock.sendMessage(groupJid, { text });
-  } catch (err) {
-    console.error('Erro ao buscar noticia do G1:', err);
-    return sock.sendMessage(groupJid, { text: 'Não consegui buscar a notícia agora, tenta de novo daqui a pouco.' });
-  }
-}
-
-// API publica do Imgflip (sem chave/login) — so os ~100 templates populares,
-// sem legenda (colocar legenda de verdade exigiria usuario/senha de uma conta
-// Imgflip real, que este bot nao lida).
-const IMGFLIP_MEMES_URL = 'https://api.imgflip.com/get_memes';
-
-async function commandMeme({ sock, groupJid, args }) {
-  const query = args.trim();
-  if (!query) {
-    return sock.sendMessage(groupJid, { text: 'Use: !meme nome-do-template (ex: !meme drake). Lista limitada aos ~100 templates mais populares do Imgflip.' });
-  }
-
-  try {
-    const res = await fetch(IMGFLIP_MEMES_URL);
-    if (!res.ok) throw new Error(`status HTTP ${res.status}`);
-    const data = await res.json();
-
-    const normalizedQuery = stripAccents(query);
-    const meme = data.data.memes.find((m) => stripAccents(m.name).includes(normalizedQuery));
-
-    if (!meme) {
-      return sock.sendMessage(groupJid, { text: `Não achei nenhum template com "${query}" entre os populares do Imgflip. Tenta outro nome (ex: drake, distracted boyfriend, doge).` });
-    }
-
-    return sock.sendMessage(groupJid, { image: { url: meme.url }, caption: meme.name });
-  } catch (err) {
-    console.error(`Erro ao buscar meme "${query}":`, err);
-    return sock.sendMessage(groupJid, { text: 'Não consegui buscar o meme agora, tenta de novo daqui a pouco.' });
-  }
 }
 
 // Cliente OpenAI criado sob demanda (so quando o !resumo e chamado), pra nao
@@ -563,25 +515,6 @@ async function commandFotoGrupo({ sock, groupJid, msg }) {
   }
 }
 
-async function commandFotoBot({ sock, groupJid, msg }) {
-  const quotedImage = getQuotedMedia(msg, 'imageMessage');
-  if (!quotedImage) {
-    return sock.sendMessage(groupJid, { text: 'Responda a uma foto com !fotobot pra eu trocar a minha própria foto de perfil por ela.' });
-  }
-
-  try {
-    const buffer = await downloadMediaMessage(quotedImage, 'buffer', {});
-    const sharp = await getSharp();
-    const jpegBuffer = await sharp(buffer).resize(640, 640, { fit: 'cover' }).jpeg().toBuffer();
-
-    await sock.updateProfilePicture(sock.user.id, jpegBuffer);
-    return sock.sendMessage(groupJid, { text: '✅ Foto do bot atualizada!' });
-  } catch (err) {
-    console.error('Erro ao trocar foto do bot:', err);
-    return sock.sendMessage(groupJid, { text: 'Não consegui trocar a foto do bot, tenta de novo daqui a pouco.' });
-  }
-}
-
 const PF_TEXT =
   'NOTA PÚBLICA DE ESCLARECIMENTO: Venho, por meio desta, declarar formalmente que não possuo qualquer ligação com as ' +
   'atividades duvidosas deste recinto virtual. Fui inserido neste grupo contra a minha vontade. Em caso de operação da ' +
@@ -712,24 +645,6 @@ async function commandMegasena({ sock, groupJid }) {
   }
   const text = fs.readFileSync(MEGASENA_FILE, 'utf-8').trim();
   return sock.sendMessage(groupJid, { text });
-}
-
-async function commandSchedule({ sock, groupJid }) {
-  const pending = loadScheduledMessages().filter((m) => !m.sent);
-  if (pending.length === 0) {
-    return sock.sendMessage(groupJid, { text: 'Nenhuma mensagem agendada no momento (edite o arquivo scheduled_messages.json).' });
-  }
-
-  const sorted = [...pending].sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
-  const blocks = sorted.map((m, i) => {
-    const lines = [`Data: ${formatDateBR(m.date)} às ${m.time}`];
-    if (m.text) lines.push(`Texto: ${m.text}`);
-    if (m.audio) lines.push(`Áudio: ${m.audio}`);
-    const block = lines.join('\n');
-    return sorted.length > 1 ? `*Schedule ${i + 1}*\n${block}` : block;
-  });
-
-  return sock.sendMessage(groupJid, { text: `📅 *Mensagens agendadas*\n\n${blocks.join('\n\n-----------------\n\n')}` });
 }
 
 async function commandAddEvento({ sock, groupJid, args }) {
@@ -924,15 +839,11 @@ const COMMAND_CATEGORIES = [
     title: 'Outros',
     commands: [
       { name: 'painel', description: 'te manda no privado um link pro painel, pra marcar presença nos eventos' },
-      { name: 'news', description: 'manchete mais recente do G1' },
       { name: 'resumo', description: 'resume as mensagens das últimas 24h, em até 10 tópicos (via IA)' },
       { name: 'transcrever', description: 'transcreve um áudio — responda o áudio com !transcrever' },
       { name: 'figurinha', description: 'transforma uma foto em figurinha — responda a foto com !figurinha' },
       { name: 'renomear', description: 'muda o nome do grupo — !renomear novo nome' },
       { name: 'fotogrupo', description: 'responda a uma foto com !fotogrupo pra trocar a foto do grupo por ela' },
-      { name: 'fotobot', description: 'responda a uma foto com !fotobot pra trocar a foto de perfil do próprio bot por ela' },
-      { name: 'schedule', description: 'lista as mensagens agendadas pendentes' },
-      { name: 'meme', description: 'manda um template de meme popular — !meme nome (ex: drake)' },
       { name: 'megasena', description: 'lista os organizadores da Mega da Virada de cada ano' },
       { name: 'policiafederal', description: 'nota pública de esclarecimento, pra qualquer eventualidade' },
       { name: 'otario', description: 'responda a uma mensagem com !otario pra marcar quem mandou ela' },
@@ -960,15 +871,11 @@ const commands = {
   naovou: commandNaoVou,
   menu: commandMenu,
   painel: commandPainel,
-  news: commandNews,
   resumo: commandResumo,
   transcrever: commandTranscrever,
   figurinha: commandFigurinha,
   renomear: commandRenomearGrupo,
   fotogrupo: commandFotoGrupo,
-  fotobot: commandFotoBot,
-  schedule: commandSchedule,
-  meme: commandMeme,
   megasena: commandMegasena,
   policiafederal: commandPoliciaFederal,
   testareleicao: commandTestarEleicao,
