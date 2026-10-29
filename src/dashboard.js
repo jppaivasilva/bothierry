@@ -372,6 +372,8 @@ const DASHBOARD_HTML = `<!doctype html>
   .menu-item:first-of-type { border-top: none; }
   .menu-cmd { display: inline-block; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; font-weight: 700; color: var(--accent-blue); background: rgba(0,122,255,.1); padding: 2px 8px; border-radius: 8px; }
   .menu-desc { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
+  .menu-birthday { display: flex; gap: 10px; align-items: baseline; padding: 5px 0; font-size: 13px; color: var(--text-primary); }
+  .menu-date { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; font-weight: 700; color: var(--text-secondary); min-width: 38px; }
   .menu-chips { display: flex; flex-wrap: wrap; gap: 6px; }
   .member-search { width: 100%; max-width: 320px; font-size: 14px; font-family: inherit; padding: 10px 14px; border-radius: 12px; border: 1px solid rgba(60,60,67,.14); background: rgba(255,255,255,.7); color: var(--text-primary); outline: none; margin-bottom: 20px; transition: border-color .15s var(--ease-out), box-shadow .15s var(--ease-out); }
   .member-search:focus { border-color: var(--accent-blue); box-shadow: 0 0 0 4px rgba(0,122,255,.14); }
@@ -1201,23 +1203,39 @@ function renderMenu(query) {
   const blocks = [];
   menuData.categories.forEach((cat) => {
     const items = cat.commands.filter((c) => !q || c.name.includes(q) || c.description.toLowerCase().includes(q));
-    if (items.length === 0) return;
+    // Conteudo dinamico que mora dentro do card da categoria: audios salvos
+    // no card "Áudios" e a lista de aniversariantes no card "Aniversários".
+    let extra = '';
+    let extraCount = 0;
+    if (cat.title === 'Áudios') {
+      const audios = menuData.audios.filter((a) => !q || a.includes(q));
+      extraCount = audios.length;
+      if (audios.length > 0) {
+        extra =
+          '<div class="modal-section-label" style="margin-top:14px;">Áudios salvos (mande !nome pra tocar)</div>' +
+          '<div class="menu-chips">' + audios.map((a) => '<span class="menu-cmd">!' + escapeHtml(a) + '</span>').join('') + '</div>';
+      }
+    } else if (cat.title === 'Aniversários') {
+      const birthdays = menuData.birthdays.filter((b) => !q || b.name.toLowerCase().includes(q));
+      extraCount = birthdays.length;
+      if (birthdays.length > 0) {
+        extra =
+          '<div class="modal-section-label" style="margin-top:14px;">Aniversariantes cadastrados</div>' +
+          birthdays.map((b) =>
+            '<div class="menu-birthday"><span class="menu-date">' + String(b.day).padStart(2, '0') + '/' + String(b.month).padStart(2, '0') +
+            '</span>' + escapeHtml(b.name) + '</div>'
+          ).join('');
+      }
+    }
+    if (items.length === 0 && extraCount === 0) return;
     blocks.push(
       '<div class="card"><div class="menu-title">' + escapeHtml(cat.emoji) + ' ' + escapeHtml(cat.title) + '</div>' +
       items.map((c) =>
         '<div class="menu-item"><span class="menu-cmd">!' + escapeHtml(c.name) + '</span>' +
         '<div class="menu-desc">' + escapeHtml(c.description) + '</div></div>'
-      ).join('') + '</div>'
+      ).join('') + extra + '</div>'
     );
   });
-  const audios = menuData.audios.filter((a) => !q || a.includes(q));
-  if (audios.length > 0) {
-    blocks.push(
-      '<div class="card"><div class="menu-title">🔊 Áudios salvos</div>' +
-      '<div class="menu-desc" style="margin:0 0 10px;">Mande !nome pra tocar. Pra salvar um novo, responda a um áudio com !salvaraudio nome.</div>' +
-      '<div class="menu-chips">' + audios.map((a) => '<span class="menu-cmd">!' + escapeHtml(a) + '</span>').join('') + '</div></div>'
-    );
-  }
   grid.innerHTML = blocks.length ? blocks.join('') : '<div class="member-empty">Nenhum comando encontrado.</div>';
 }
 
@@ -1450,7 +1468,7 @@ function renderLoginPage(hasError) {
  * (status de conexao, uptime, mensagens por hora, eventos recentes). So
  * modulo nativo 'http' — nenhuma dependencia nova no projeto.
  */
-export function startDashboardServer(port, { getCommandsMenu = () => ({ categories: [], audios: [] }) } = {}) {
+export function startDashboardServer(port, { getCommandsMenu = () => ({ categories: [], audios: [], birthdays: [] }) } = {}) {
   const server = http.createServer((req, res) => {
     const ip = req.socket.remoteAddress || 'unknown';
     const urlObj = new URL(req.url, 'http://localhost');

@@ -2169,6 +2169,12 @@ async function startBot() {
 }
 
 startDashboardServer(DASHBOARD_PORT, {
-  getCommandsMenu: () => ({ categories: COMMAND_CATEGORIES, audios: listAudioFiles().map((a) => a.name) }),
+  getCommandsMenu: () => ({
+    categories: COMMAND_CATEGORIES,
+    audios: listAudioFiles().map((a) => a.name),
+    birthdays: [...loadBirthdays()]
+      .sort((a, b) => a.month - b.month || a.day - b.day)
+      .map(({ name, day, month }) => ({ name, day, month })),
+  }),
 });
 startBot();
