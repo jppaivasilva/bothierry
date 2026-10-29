@@ -1113,6 +1113,21 @@ function birthdayCaption(people) {
   return `🎉🎂 Hoje é aniversário de ${joined}! Parabéns! 🎉🎂`;
 }
 
+// Evento criado pelo painel: o bot avisa no grupo, igual a confirmacao do
+// !addevento (so que sem ninguem ter digitado o comando). Se o bot estiver
+// desconectado ou nao achar o grupo, so nao avisa — o evento ja foi salvo.
+async function announceNewEvent(event, createdBy) {
+  if (!currentSock) return;
+  const groupJid = await findMainGroupJid(currentSock);
+  if (!groupJid) return;
+  const lines = ['📣 *Novo evento!*', '', `📅 *${event.title}*`, `Data: ${formatDateBR(event.date)}`, `Local: ${event.location}`, `Horário: ${event.time}`];
+  for (const [label, value] of Object.entries(event.extra || {})) lines.push(`${label}: ${value}`);
+  lines.push('', createdBy ? `Criado por ${createdBy} no painel.` : 'Criado pelo painel.');
+  lines.push('Confirme com *!vou* ou *!naovou* (ou pelo painel: mande *!painel*).');
+  const sent = await currentSock.sendMessage(groupJid, { text: lines.join('\n') });
+  if (sent?.key?.id) sentByBot.add(sent.key.id);
+}
+
 // Manda o aviso de aniversario num grupo: cartao em imagem com a legenda; se o
 // cartao nao puder ser gerado, manda so o texto (como era antes).
 async function sendBirthdayToGroup(sock, groupJid, rawPeople) {
@@ -2387,6 +2402,7 @@ async function startBot() {
 
 startDashboardServer(DASHBOARD_PORT, {
   deleteAudio: deleteAudioByName,
+  announceEvent: announceNewEvent,
   getCommandsMenu: () => ({
     categories: COMMAND_CATEGORIES,
     audios: listAudioFiles().map((a) => a.name),
