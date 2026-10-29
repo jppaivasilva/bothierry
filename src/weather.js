@@ -12,6 +12,19 @@ const CITIES = [
   { name: 'São Paulo (Capital)', lat: -23.5505, lon: -46.6333 },
 ];
 
+// Cidades que entram na previsao so por um periodo (datas YYYY-MM-DD, horario de
+// Brasilia, inclusive nas duas pontas). Depois de "until" saem sozinhas — nao
+// precisa mexer no codigo de novo.
+const TEMPORARY_CITIES = [
+  { name: 'Tietê', lat: -23.1019, lon: -47.7147, from: '2026-10-30', until: '2026-11-02' },
+];
+
+// Cidades da previsao de hoje: as fixas + as temporarias cujo periodo inclui a data.
+function getActiveCities(now = new Date()) {
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(now);
+  return [...CITIES, ...TEMPORARY_CITIES.filter((c) => c.from <= today && today <= c.until)];
+}
+
 // Mapa simplificado dos codigos WMO (weathercode) que a Open-Meteo usa, pra
 // um emoji + descricao curta em portugues. Nao cobre todo o espectro (seria
 // uns 30 codigos), so os mais comuns — qualquer codigo fora da lista cai no
@@ -77,8 +90,8 @@ async function fetchCityForecast(city) {
  * falharem (API fora do ar, etc) sao puladas silenciosamente — a lista volta
  * so com as que deram certo (vazia se TODAS falharem).
  */
-export async function getWeatherData() {
-  const results = await Promise.allSettled(CITIES.map(fetchCityForecast));
+export async function getWeatherData(now = new Date()) {
+  const results = await Promise.allSettled(getActiveCities(now).map(fetchCityForecast));
   return results.filter((r) => r.status === 'fulfilled').map((r) => r.value);
 }
 
