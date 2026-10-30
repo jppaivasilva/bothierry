@@ -1181,6 +1181,7 @@ async function refresh() {
     fim_expediente: 'Mensagem de fim de expediente',
     foto_grupo_noticia: 'Foto do grupo (notícia)',
     ranking_semanal: 'Ranking semanal',
+    resumo_semanal: 'Resumo semanal (domingo 21h)',
   };
   const cronsBody = document.getElementById('cronsBody');
   const cronRows = Object.entries(CRON_LABELS).map(([key, label]) => {

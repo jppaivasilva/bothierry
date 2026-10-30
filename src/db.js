@@ -589,3 +589,43 @@ export function getMemberStats(groupJid, jid) {
     trend: { dates: trendDates, counts: trendDates.map((d) => trendCounts[d]) },
   };
 }
+
+/**
+ * Resumo de uma janela de tempo [sinceTs, untilTs) (segundos, unix) de um grupo,
+ * comparado com a janela anterior de mesmo tamanho — usado pelo resumo semanal.
+ * Retorna null se ninguem falou na janela.
+ */
+export function getWindowSummary(groupJid, sinceTs, untilTs) {
+  const rows = getAllRecordsForGroup(groupJid);
+  const inWindow = rows.filter((r) => r.timestamp >= sinceTs && r.timestamp < untilTs);
+  if (inWindow.length === 0) return null;
+  const prevSince = sinceTs - (untilTs - sinceTs);
+  const prevTotal = rows.filter((r) => r.timestamp >= prevSince && r.timestamp < sinceTs).length;
+
+  const bySender = new Map();
+  const byHour = new Array(24).fill(0);
+  const byDate = new Map();
+  const urlCounts = new Map();
+  let linkMessages = 0;
+  const fmtHour = new Intl.DateTimeFormat('en-GB', { timeZone: 'America/Sao_Paulo', hour: '2-digit', hour12: false });
+
+  for (const r of inWindow) {
+    const s = bySender.get(r.senderJid) || { jid: r.senderJid, name: r.senderName, total: 0 };
+    s.total += 1;
+    s.name = r.senderName;
+    bySender.set(r.senderJid, s);
+    byHour[Number(fmtHour.format(new Date(r.timestamp * 1000))) % 24] += 1;
+    byDate.set(r.messageDate, (byDate.get(r.messageDate) || 0) + 1);
+    const urls = r.text ? extractUrls(r.text) : [];
+    if (urls.length > 0) linkMessages += 1;
+    for (const u of new Set(urls)) urlCounts.set(u, (urlCounts.get(u) || 0) + 1);
+  }
+
+  const ranking = [...bySender.values()].sort((a, b) => b.total - a.total);
+  const peakHour = byHour.indexOf(Math.max(...byHour));
+  const [peakDate] = [...byDate.entries()].sort((a, b) => b[1] - a[1])[0];
+  const peakDayName = new Intl.DateTimeFormat('pt-BR', { timeZone: 'UTC', weekday: 'long' }).format(new Date(peakDate + 'T12:00:00Z'));
+  const topLinkRepeats = Math.max(0, ...urlCounts.values());
+
+  return { total: inWindow.length, prevTotal, ranking, peakHour, peakDayName, linkMessages, topLinkRepeats };
+}
