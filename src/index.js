@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { makeWASocket, useMultiFileAuthState, DisconnectReason, downloadMediaMessage, jidNormalizedUser } from '@whiskeysockets/baileys';
+import { makeWASocket, useMultiFileAuthState, DisconnectReason, downloadMediaMessage, jidNormalizedUser, generateWAMessageContent, generateMessageIDV2 } from '@whiskeysockets/baileys';
 import qrcode from 'qrcode-terminal';
 import pino from 'pino';
 import cron from 'node-cron';
@@ -882,6 +882,7 @@ const commands = {
   testareleicao: commandTestarEleicao,
   testarpropaganda: commandTestarPropaganda,
   testarbomdia: commandTestarBomDia,
+  testarstory: commandTestarStory,
   testaraniversario: commandTestarAniversario,
   testarfotopresidente: commandTestarFotoPresidente,
   testarresultadoeleicao: commandTestarResultadoEleicao,
@@ -1182,6 +1183,27 @@ async function sendMorningMessage(sock, onlyGroupJid = null) {
 // !testarbomdia — manda o bom dia so no grupo onde foi digitado (pra ver como fica).
 async function commandTestarBomDia({ sock, groupJid }) {
   await sendMorningMessage(sock, groupJid);
+}
+
+// !testarstory — EXPERIMENTO: tenta postar o cartao de previsao como story do
+// grupo. O Baileys conhece o formato (groupStatusMessageV2) mas nao tem funcao
+// pronta, entao montamos a mensagem na mao e mandamos por relayMessage. Nao se
+// sabe se o servidor do WhatsApp aceita de um bot — o resultado (ou o erro) e
+// respondido no proprio grupo.
+async function commandTestarStory({ sock, groupJid }) {
+  try {
+    const weather = await getWeatherData();
+    if (weather.length === 0) return sock.sendMessage(groupJid, { text: 'Story: sem dados de previsao pra montar o cartao.' });
+    const image = await renderWeatherCard(weather);
+    const content = await generateWAMessageContent({ image, caption: 'Previsão do tempo 🌦️' }, { upload: sock.waUploadToServer });
+    const messageId = generateMessageIDV2(sock.user?.id);
+    sentByBot.add(messageId);
+    await sock.relayMessage(groupJid, { groupStatusMessageV2: { message: content } }, { messageId });
+    return sock.sendMessage(groupJid, { text: `Story enviado (id ${messageId}). Confere na aba de stories do grupo — se nao apareceu, o WhatsApp ignorou.` });
+  } catch (err) {
+    console.error('Erro no teste de story do grupo:', err);
+    return sock.sendMessage(groupJid, { text: `Story falhou: ${err?.message || err}` });
+  }
 }
 
 // Mensagem automatica das 18h: soma o tempo "perdido" e o ranking completo do
