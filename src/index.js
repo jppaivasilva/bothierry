@@ -17,7 +17,7 @@ async function getSharp() {
   if (!sharpModule) sharpModule = (await import('sharp')).default;
   return sharpModule;
 }
-import { logMessage, getDailyCounts, getCountsSince, getCountsBetween, getMessagesSince, extractUrls, wasUrlSentSince, loadSeenMessageIds, archiveOldMessages, getRecentSenderJids, getMainGroupJid } from './db.js';
+import { logMessage, getDailyCounts, getCountsSince, getCountsBetween, getMessagesSince, extractUrls, wasUrlSentSince, loadSeenMessageIds, archiveOldMessages, getRecentSenderJids, getMainGroupJid, getWindowSummary } from './db.js';
 import { syncAvatars, getAvatarPath } from './avatars.js';
 import {
   loadBirthdays,
@@ -41,6 +41,8 @@ import { getWeatherData, formatWeatherBlock } from './weather.js';
 import { renderWeatherCard } from './weatherCard.js';
 import { shouldSendMorning, isWeekend, morningGreeting } from './morning.js';
 import { renderBirthdayCard, photoToDataUri } from './birthdayCard.js';
+import { renderWeeklyCard } from './weeklyCard.js';
+import { recordAudioUse, getTopAudioSince } from './audioUsage.js';
 import { formatDisplayName } from './displayNames.js';
 import { resolveBirthdayMember, birthdayDisplayName, normalizeName } from './birthdayLinks.js';
 import { readBirthdayPhoto, readMemberPhoto } from './birthdayPhotos.js';
@@ -882,6 +884,7 @@ const commands = {
   testareleicao: commandTestarEleicao,
   testarpropaganda: commandTestarPropaganda,
   testarbomdia: commandTestarBomDia,
+  resumosemanal: commandResumoSemanal,
   testaraniversario: commandTestarAniversario,
   testarfotopresidente: commandTestarFotoPresidente,
   testarresultadoeleicao: commandTestarResultadoEleicao,
@@ -1182,6 +1185,72 @@ async function sendMorningMessage(sock, onlyGroupJid = null) {
 // !testarbomdia — manda o bom dia so no grupo onde foi digitado (pra ver como fica).
 async function commandTestarBomDia({ sock, groupJid }) {
   await sendMorningMessage(sock, groupJid);
+}
+
+// Resumo semanal: cartao grande (src/weeklyCard.js) com os ultimos 7 dias do
+// grupo — campeao, top 5, total (vs semana anterior), horario de pico, links e
+// audio mais usado. Cai pra texto se a imagem falhar. onlyGroupJid manda so num
+// grupo (usado pelo !resumosemanal); grupo sem mensagens na semana e pulado.
+function weeklyTextFallback(summary, rangeLabel) {
+  const lines = [`📊 *Resumo da semana* (${rangeLabel})`, ''];
+  summary.ranking.slice(0, 5).forEach((p, i) => lines.push(`${i + 1}. ${formatDisplayName(p.name)}: ${p.total} msgs`));
+  lines.push('', `Total: ${summary.total} mensagens`);
+  return lines.join('\n');
+}
+
+async function sendWeeklySummary(sock, onlyGroupJid = null) {
+  const untilTs = Math.floor(Date.now() / 1000);
+  const sinceTs = untilTs - 7 * 24 * 60 * 60;
+  const { date: today } = getBrasiliaNow();
+  const rangeLabel = `${formatDateBR(addDaysBR(today, -7))} a ${formatDateBR(today)}`;
+  const groupJids = onlyGroupJid ? [onlyGroupJid] : Object.keys(await sock.groupFetchAllParticipating());
+
+  for (const groupJid of groupJids) {
+    try {
+      const summary = getWindowSummary(groupJid, sinceTs, untilTs);
+      if (!summary) {
+        if (onlyGroupJid) await sock.sendMessage(groupJid, { text: 'Ninguém falou nos últimos 7 dias, não tem o que resumir.' });
+        continue;
+      }
+      let image = null;
+      try {
+        const champion = summary.ranking[0];
+        let championPhotoUri = null;
+        try {
+          const buffer = readMemberPhoto(champion.jid) || (await getBirthdayPhotoBuffer(sock, champion.jid));
+          if (buffer) championPhotoUri = await photoToDataUri(buffer);
+        } catch (err) {
+          console.error('Erro ao preparar a foto do campeao da semana:', err);
+        }
+        const diff = summary.prevTotal > 0 ? Math.round(((summary.total - summary.prevTotal) / summary.prevTotal) * 100) : null;
+        const deltaLabel = diff === null ? 'primeira semana medida' : diff === 0 ? 'igual à semana passada' : `${Math.abs(diff)}% ${diff > 0 ? 'a mais' : 'a menos'} que a semana passada`;
+        image = renderWeeklyCard({
+          rangeLabel,
+          total: summary.total,
+          deltaLabel,
+          peakHour: summary.peakHour,
+          peakDayName: summary.peakDayName,
+          linkMessages: summary.linkMessages,
+          topLinkRepeats: summary.topLinkRepeats,
+          audio: getTopAudioSince(sinceTs),
+          ranking: summary.ranking.map((p) => ({ name: formatDisplayName(p.name), total: p.total })),
+          championPhotoUri,
+        });
+      } catch (err) {
+        console.error('Erro ao montar o cartao do resumo semanal (mandando em texto):', err);
+      }
+      const caption = `📊 Resumo da semana (${rangeLabel})`;
+      const sent = await sock.sendMessage(groupJid, image ? { image, caption } : { text: weeklyTextFallback(summary, rangeLabel) });
+      if (sent?.key?.id) sentByBot.add(sent.key.id);
+    } catch (err) {
+      console.error(`Erro ao enviar resumo semanal para ${groupJid}:`, err);
+    }
+  }
+}
+
+// !resumosemanal — manda o resumo so no grupo onde foi digitado (pra ver como fica).
+async function commandResumoSemanal({ sock, groupJid }) {
+  await sendWeeklySummary(sock, groupJid);
 }
 
 // Mensagem automatica das 18h: soma o tempo "perdido" e o ranking completo do
@@ -1660,6 +1729,7 @@ async function sendAudioByName({ sock, groupJid }, name) {
       ptt: path.extname(audio.filename).toLowerCase() === '.ogg',
     });
     if (sent?.key?.id) sentByBot.add(sent.key.id);
+    recordAudioUse(name);
   } catch (err) {
     console.error(`Erro ao enviar audio ${name}:`, err);
   }
@@ -1964,6 +2034,15 @@ cron.schedule(
   () => {
     recordCronRun('ranking_semanal');
     if (currentSock) sendWeeklyRanking(currentSock).catch((err) => console.error('Erro ao enviar ranking semanal (cron):', err));
+  },
+  CRON_OPTIONS
+);
+
+cron.schedule(
+  '0 21 * * 0',
+  () => {
+    recordCronRun('resumo_semanal');
+    if (currentSock) sendWeeklySummary(currentSock).catch((err) => console.error('Erro ao enviar resumo semanal (cron):', err));
   },
   CRON_OPTIONS
 );
