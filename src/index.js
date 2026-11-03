@@ -947,7 +947,7 @@ async function syncGroupNameForBirthdays(sock) {
     let targetJids = person.groupJid ? [person.groupJid] : null;
     if (!targetJids) {
       if (!allGroupJids) {
-        const participating = await sock.groupFetchAllParticipating();
+        const participating = await fetchGroups(sock);
         allGroupJids = Object.keys(participating);
       }
       targetJids = allGroupJids;
@@ -1069,7 +1069,7 @@ async function checkAndSendBirthdays(sock) {
     let targetJids = person.groupJid ? [person.groupJid] : null;
     if (!targetJids) {
       if (!allGroupJids) {
-        const participating = await sock.groupFetchAllParticipating();
+        const participating = await fetchGroups(sock);
         allGroupJids = Object.keys(participating);
       }
       targetJids = allGroupJids;
@@ -1126,7 +1126,7 @@ async function sendAdToGroup(sock, groupJid) {
 }
 
 async function sendAdMessage(sock) {
-  const participating = await sock.groupFetchAllParticipating();
+  const participating = await fetchGroups(sock);
   for (const groupJid of Object.keys(participating)) {
     try {
       await sendAdToGroup(sock, groupJid);
@@ -1171,7 +1171,7 @@ async function sendMorningMessage(sock, onlyGroupJid = null) {
     }
   }
 
-  const groupJids = onlyGroupJid ? [onlyGroupJid] : Object.keys(await sock.groupFetchAllParticipating());
+  const groupJids = onlyGroupJid ? [onlyGroupJid] : Object.keys(await fetchGroups(sock));
   for (const groupJid of groupJids) {
     try {
       const sent = await sock.sendMessage(groupJid, image ? { image, caption: text } : { text });
@@ -1203,7 +1203,7 @@ async function sendWeeklySummary(sock, onlyGroupJid = null) {
   const sinceTs = untilTs - 7 * 24 * 60 * 60;
   const { date: today } = getBrasiliaNow();
   const rangeLabel = `${formatDateBR(addDaysBR(today, -7))} a ${formatDateBR(today)}`;
-  const groupJids = onlyGroupJid ? [onlyGroupJid] : Object.keys(await sock.groupFetchAllParticipating());
+  const groupJids = onlyGroupJid ? [onlyGroupJid] : Object.keys(await fetchGroups(sock));
 
   for (const groupJid of groupJids) {
     try {
@@ -1263,7 +1263,7 @@ async function sendEndOfDayMessage(sock) {
   }
 
   const since = Math.floor(Date.now() / 1000) - (EVENING_HOUR - MORNING_HOUR) * 60 * 60;
-  const participating = await sock.groupFetchAllParticipating();
+  const participating = await fetchGroups(sock);
 
   for (const groupJid of Object.keys(participating)) {
     const counts = getCountsSince(groupJid, since);
@@ -1290,12 +1290,34 @@ async function sendEndOfDayMessage(sock) {
   }
 }
 
+// Lista os grupos do bot. O WhatsApp as vezes responde "rate-overlimit" a essa
+// consulta (foi o que derrubou a mensagem de fim de expediente de 03/11), entao:
+// tenta de novo ate 3 vezes com espera crescente (30s, 60s, 90s) e guarda o
+// resultado por 2 min, pra varias tarefas seguidas nao baterem na API de novo.
+const GROUPS_CACHE_MS = 2 * 60 * 1000;
+let groupsCache = { at: 0, value: null };
+
+async function fetchGroups(sock) {
+  if (groupsCache.value && Date.now() - groupsCache.at < GROUPS_CACHE_MS) return groupsCache.value;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const value = await sock.groupFetchAllParticipating();
+      groupsCache = { at: Date.now(), value };
+      return value;
+    } catch (err) {
+      if (!/rate-overlimit/i.test(String(err?.message ?? err)) || attempt >= 3) throw err;
+      console.error(`[grupos] rate-overlimit ao listar grupos, tentando de novo em ${30 * (attempt + 1)}s`);
+      await new Promise((resolve) => setTimeout(resolve, 30000 * (attempt + 1)));
+    }
+  }
+}
+
 // Acha o JID de um grupo pelo nome (subject) — Baileys so indexa grupos por
 // JID, entao e preciso listar todos os grupos que o bot participa e comparar.
 // Acha o grupo "principal" do bot SEM depender do nome (que muda com frequencia):
 // se o bot esta em um grupo so, e ele; se em varios, o mais ativo nos ultimos 7 dias.
 async function findMainGroupJid(sock) {
-  const participating = await sock.groupFetchAllParticipating();
+  const participating = await fetchGroups(sock);
   const jids = Object.keys(participating);
   if (jids.length === 1) return jids[0];
   const active = getMainGroupJid();
@@ -1588,7 +1610,7 @@ async function sendWeeklyRanking(sock) {
     if (!(await isBrazilianHoliday(day))) workingDays.push(day);
   }
 
-  const participating = await sock.groupFetchAllParticipating();
+  const participating = await fetchGroups(sock);
 
   for (const groupJid of Object.keys(participating)) {
     const merged = new Map();
@@ -1903,7 +1925,7 @@ async function sendScheduledMessages(sock) {
   const due = getDueMessages(date, time);
   if (due.length === 0) return;
 
-  const participating = await sock.groupFetchAllParticipating();
+  const participating = await fetchGroups(sock);
   const groupJids = Object.keys(participating);
 
   for (const message of due) {
