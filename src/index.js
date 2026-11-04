@@ -17,7 +17,7 @@ async function getSharp() {
   if (!sharpModule) sharpModule = (await import('sharp')).default;
   return sharpModule;
 }
-import { logMessage, getDailyCounts, getCountsSince, getCountsBetween, getMessagesSince, extractUrls, wasUrlSentSince, loadSeenMessageIds, archiveOldMessages, getRecentSenderJids, getMainGroupJid, getWindowSummary } from './db.js';
+import { logMessage, getDailyCounts, getCountsSince, getCountsBetween, getMessagesSince, extractUrls, wasUrlSentSince, loadSeenMessageIds, archiveOldMessages, getRecentSenderJids, getMainGroupJid, getWindowSummary, getTextsForDate } from './db.js';
 import { syncAvatars, getAvatarPath } from './avatars.js';
 import {
   loadBirthdays,
@@ -42,6 +42,8 @@ import { renderWeatherCard } from './weatherCard.js';
 import { shouldSendMorning, isWeekend, morningGreeting } from './morning.js';
 import { renderBirthdayCard, photoToDataUri } from './birthdayCard.js';
 import { renderWeeklyCard } from './weeklyCard.js';
+import { renderWordCloudCard } from './wordcloudCard.js';
+import { buildWordCloud } from './wordcloud.js';
 import { recordAudioUse, getTopAudioSince } from './audioUsage.js';
 import { formatDisplayName } from './displayNames.js';
 import { resolveBirthdayMember, birthdayDisplayName, normalizeName } from './birthdayLinks.js';
@@ -884,6 +886,7 @@ const commands = {
   testareleicao: commandTestarEleicao,
   testarpropaganda: commandTestarPropaganda,
   testarbomdia: commandTestarBomDia,
+  testarnuvem: commandTestarNuvem,
   resumosemanal: commandResumoSemanal,
   testaraniversario: commandTestarAniversario,
   testarfotopresidente: commandTestarFotoPresidente,
@@ -1253,6 +1256,31 @@ async function commandResumoSemanal({ sock, groupJid }) {
   await sendWeeklySummary(sock, groupJid);
 }
 
+// Nuvem de palavras do dia (src/wordcloudCard.js), mandada logo depois da
+// mensagem das 18h. Dia com poucas palavras diferentes nao rende nuvem — nao
+// manda nada. Falha ao desenhar so vai pro log (a mensagem das 18h ja saiu).
+async function sendWordCloudToGroup(sock, groupJid, { force = false } = {}) {
+  const { date } = getBrasiliaNow();
+  const cloud = buildWordCloud(getTextsForDate(groupJid, date), 60);
+  if (cloud.words.length < 5) {
+    if (force) await sock.sendMessage(groupJid, { text: 'Poucas palavras hoje pra montar uma nuvem.' });
+    return;
+  }
+  const image = renderWordCloudCard(cloud.words, date, cloud.totalMessages);
+  const sent = await sock.sendMessage(groupJid, { image, caption: '☁️ Nuvem de palavras do dia' });
+  if (sent?.key?.id) sentByBot.add(sent.key.id);
+}
+
+// !testarnuvem — manda a nuvem de hoje so no grupo onde foi digitado.
+async function commandTestarNuvem({ sock, groupJid }) {
+  try {
+    await sendWordCloudToGroup(sock, groupJid, { force: true });
+  } catch (err) {
+    console.error('Erro ao montar a nuvem de palavras:', err);
+    await sock.sendMessage(groupJid, { text: 'Não consegui montar a nuvem agora.' });
+  }
+}
+
 // Mensagem automatica das 18h: soma o tempo "perdido" e o ranking completo do
 // expediente (ultimas 10h corridas — 8h as 18h), pra cada grupo que o bot participa.
 async function sendEndOfDayMessage(sock) {
@@ -1286,6 +1314,12 @@ async function sendEndOfDayMessage(sock) {
       await sock.sendMessage(groupJid, { text: lines.join('\n') });
     } catch (err) {
       console.error(`Erro ao enviar mensagem de fim de expediente para ${groupJid}:`, err);
+    }
+
+    try {
+      await sendWordCloudToGroup(sock, groupJid);
+    } catch (err) {
+      console.error(`Erro ao enviar a nuvem de palavras para ${groupJid}:`, err);
     }
   }
 }

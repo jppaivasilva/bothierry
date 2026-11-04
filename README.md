@@ -180,6 +180,7 @@ Tudo em `src/` (JavaScript, módulos ES):
 | `displayNames.js` | **Nome padronizado** de cada pessoa (acento, maiúsculas, homônimos) — usado em **todo lugar**: painel, rankings do WhatsApp, `!resumo`, eventos, perguntas sobre dados e aniversários |
 | `morning.js` | Regras do bom dia: em quais dias sai (seg–sex + datas extras de fim de semana) e o texto de abertura |
 | `weather.js` | Previsão do tempo (Open-Meteo): dados por cidade e texto de reserva. Além das cidades fixas, aceita **cidades temporárias** com data de início e fim (`TEMPORARY_CITIES`; ex.: Tietê de 30/10 a 02/11) que saem sozinhas |
+| `wordcloudCard.js` | Desenha o **cartão da nuvem de palavras** (mesmo layout em espiral do painel, feito no servidor com o resvg) |
 | `wordcloud.js` | Conta as palavras do dia pra **nuvem de palavras** do painel (ignora links, menções, comandos, risadas e palavras comuns) |
 | `weeklyCard.js` | Desenha o **cartão do resumo semanal** (SVG → PNG), no estilo escuro do cartão de aniversário |
 | `audioUsage.js` | Conta quantas vezes cada áudio salvo foi chamado (`audio_usage.json`, só na VM) — alimenta o "áudio da semana" |
@@ -239,7 +240,7 @@ Todas dentro do processo do bot (`node-cron`, fuso `America/Sao_Paulo`, tolerân
 | 08:00 (seg–sex; mais as datas extras de fim de semana em `morning.js`) | bom dia + feriado nacional + **cartão de previsão do tempo** (imagem; se falhar, vai em texto) |
 | 08:00 (seg e qua) | atualiza a foto do grupo com a notícia do dia (via IA) |
 | 09:00 | aviso de aniversariantes (**cartão em imagem** com a foto; texto se falhar) + renomeia o grupo |
-| 18:00 (seg–sex) | ranking do expediente (08h–18h) |
+| 18:00 (seg–sex) | ranking do expediente (08h–18h), seguido do **cartão da nuvem de palavras do dia** (pula se o dia teve menos de 5 palavras diferentes) |
 | 18:05 (sexta) | ranking semanal |
 | 21:00 (domingo) | **resumo semanal** — cartão grande com os últimos 7 dias (campeão, top 5, total vs. semana anterior, horário de pico, links, áudio mais usado) |
 | **22:30 (todo dia)** | **propaganda (#ad)**: banner + legenda (`AD_HOUR`/`AD_MINUTE`/`AD_DAYS` em `index.js`) |
@@ -333,6 +334,7 @@ Use `!` ou `/` no começo. `!menu` lista tudo no próprio WhatsApp (e a aba **Co
 | `!policiafederal` · `!otario` | zoeiras |
 | `!testarpropaganda` *(oculto)* | manda a propaganda só no grupo onde for digitado |
 | `!testarbomdia` *(oculto)* | manda o bom dia (com o cartão de previsão) só no grupo onde for digitado |
+| `!testarnuvem` *(oculto)* | manda o cartão da nuvem de palavras de hoje só no grupo onde for digitado |
 | `!resumosemanal` *(oculto)* | manda o resumo semanal (cartão) só no grupo onde for digitado |
 | `!testaraniversario [nome]` *(oculto)* | manda o cartão de aniversário só no grupo onde for digitado (do nome informado, ou do próximo aniversariante) |
 
