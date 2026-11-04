@@ -4,13 +4,14 @@ import crypto from 'crypto';
 import os from 'os';
 import path from 'path';
 import { getDashboardData, getMessagesPerHourForDate, getSystemStats, getSystemStatsHistory } from './metrics.js';
-import { getCountsBetween, getMainGroupJid, getMessageTrend, getActivityHeatmap, getTopSenderPerHour, getMemberList, getMemberStats } from './db.js';
+import { getTextsForDate, getCountsBetween, getMainGroupJid, getMessageTrend, getActivityHeatmap, getTopSenderPerHour, getMemberList, getMemberStats } from './db.js';
 import { loadBirthdays } from './birthdays.js';
 import { resolveBirthdayMember, suggestBirthdayMembers, setBirthdayLink, normalizeName } from './birthdayLinks.js';
 import { getMembersWithExtras, addExtraMember, removeExtraMember } from './extraMembers.js';
 import { birthdayPhotoPath, birthdayPhotoVersion, deleteBirthdayPhoto, memberPhotoPath, memberPhotoVersion, saveMemberPhoto, deleteMemberPhoto } from './birthdayPhotos.js';
 import { BOT_PHOTO_PATH } from './groupPhoto.js';
 import { formatDisplayName } from './displayNames.js';
+import { buildWordCloud } from './wordcloud.js';
 import { getAvatarPath } from './avatars.js';
 import { loadEvents, addEvent, deleteEvent, eventTitleExists, addAttendee, addAbsentee } from './events.js';
 
@@ -519,6 +520,10 @@ const DASHBOARD_HTML = `<!doctype html>
   .tag-auto { background: rgba(52,199,89,.16); color: #1f8f3d; }
   .tag-none { background: rgba(255,59,48,.12); color: #d70015; }
   .menu-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .wc-box { position: relative; width: 100%; height: 480px; overflow: hidden; }
+  .wc-word { position: absolute; line-height: 1; white-space: nowrap; font-weight: 800; letter-spacing: -.02em; cursor: default; transition: transform .15s var(--ease-out); }
+  .wc-word:hover { transform: scale(1.08); }
+  .wc-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 14px; color: var(--text-secondary); }
   .member-search { width: 100%; max-width: 320px; font-size: 14px; font-family: inherit; padding: 10px 14px; border-radius: 12px; border: 1px solid rgba(60,60,67,.14); background: rgba(255,255,255,.7); color: var(--text-primary); outline: none; margin-bottom: 20px; transition: border-color .15s var(--ease-out), box-shadow .15s var(--ease-out); }
   .member-search:focus { border-color: var(--accent-blue); box-shadow: 0 0 0 4px rgba(0,122,255,.14); }
   .member-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
@@ -605,6 +610,7 @@ const DASHBOARD_HTML = `<!doctype html>
     <div class="tabs" style="margin-bottom:0;">
       <button class="tab-btn active" data-tab="overview">Visão geral</button>
       <button class="tab-btn" data-tab="activity">Atividade</button>
+      <button class="tab-btn" data-tab="cloud">Nuvem</button>
       <button class="tab-btn" data-tab="members">Membros</button>
       <button class="tab-btn" data-tab="menu">Comandos</button>
       <button class="tab-btn" data-tab="events">Eventos</button>
@@ -693,6 +699,20 @@ const DASHBOARD_HTML = `<!doctype html>
       </div>
       <div id="heatmap" style="overflow-x:auto;"></div>
     </div>
+  </div>
+  </div>
+
+  <div id="tab-cloud" class="tab-panel">
+  <div class="sub">As palavras mais faladas no grupo no dia · quanto maior a palavra, mais vezes ela apareceu</div>
+  <div class="chart-box">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+      <div>
+        <div class="title">Nuvem de palavras</div>
+        <span class="label subtitle" id="cloudSubtitle">Dia: — · Mensagens: —</span>
+      </div>
+      <input type="date" id="cloudDate" />
+    </div>
+    <div id="cloudBox" class="wc-box"></div>
   </div>
   </div>
 
@@ -836,6 +856,7 @@ document.querySelectorAll('.tabs:not(#rankingToggle) > .tab-btn').forEach((btn) 
     // aba corrige isso, recalculando o tamanho com o container ja visivel.
     if (btn.dataset.tab === 'activity' && trendChart) trendChart.resize();
     if (btn.dataset.tab === 'server' && systemHistoryChart) systemHistoryChart.resize();
+    if (btn.dataset.tab === 'cloud') loadCloud();
     if (btn.dataset.tab === 'members') loadMembers();
     if (btn.dataset.tab === 'menu') loadMenu();
     if (btn.dataset.tab === 'events') loadEvents();
@@ -1495,6 +1516,79 @@ fetch('/api/me').then((r) => r.json()).then((me) => {
   // Quem entrou pelo link do !painel veio pra marcar presenca: ja abre em Eventos.
   if (me.role === 'member') document.querySelector('button[data-tab=events]').click();
 }).catch(() => {});
+
+
+// ---------- Nuvem de palavras ----------
+// Layout em espiral: as palavras mais frequentes entram primeiro, no centro, e
+// cada uma procura o primeiro lugar livre girando pra fora (sem sobreposicao).
+let cloudWords = [];
+const CLOUD_COLORS = ['#007aff', '#af52de', '#ff9500', '#34c759', '#ff2d55', '#5856d6'];
+
+function layoutCloud() {
+  const box = document.getElementById('cloudBox');
+  box.innerHTML = '';
+  if (cloudWords.length === 0) {
+    box.innerHTML = '<div class="wc-empty">Ninguém falou nada nesse dia 🤐</div>';
+    return;
+  }
+  // No celular a caixa e estreita: fica mais alta pra caberem mais palavras.
+  box.style.height = (box.clientWidth < 600 ? 680 : 480) + 'px';
+  const W = box.clientWidth;
+  const H = box.clientHeight;
+  const maxCount = cloudWords[0].count;
+  const minCount = cloudWords[cloudWords.length - 1].count;
+  const maxSize = Math.min(86, W / 6);
+  const minSize = 15;
+  const placed = [];
+  cloudWords.forEach((w, i) => {
+    const ratio = maxCount === minCount ? 1 : (w.count - minCount) / (maxCount - minCount);
+    const size = Math.round(minSize + Math.sqrt(ratio) * (maxSize - minSize));
+    const el = document.createElement('span');
+    el.className = 'wc-word';
+    el.textContent = w.word;
+    el.title = w.word + ' · ' + w.count + (w.count === 1 ? ' vez' : ' vezes');
+    el.style.fontSize = size + 'px';
+    el.style.color = CLOUD_COLORS[i % CLOUD_COLORS.length];
+    el.style.visibility = 'hidden';
+    box.appendChild(el);
+    const bw = el.offsetWidth + 8;
+    const bh = el.offsetHeight + 4;
+    let spot = null;
+    for (let t = 0; t < 4000 && !spot; t += 1) {
+      const angle = t * 0.35;
+      const radius = 2 * angle;
+      const x = W / 2 + radius * Math.cos(angle) * 1.6 - bw / 2;
+      const y = H / 2 + radius * Math.sin(angle) - bh / 2;
+      if (x < 0 || y < 0 || x + bw > W || y + bh > H) continue;
+      if (!placed.some((p) => x < p.x + p.w && x + bw > p.x && y < p.y + p.h && y + bh > p.y)) spot = { x, y, w: bw, h: bh };
+    }
+    if (!spot) { el.remove(); return; }
+    placed.push(spot);
+    el.style.left = (spot.x + 4) + 'px';
+    el.style.top = (spot.y + 2) + 'px';
+    el.style.visibility = 'visible';
+  });
+}
+
+async function loadCloud() {
+  const input = document.getElementById('cloudDate');
+  const dateParam = input.value || todayBR();
+  try {
+    const data = await fetch('/api/wordcloud?date=' + encodeURIComponent(dateParam)).then((r) => r.json());
+    cloudWords = data.words || [];
+    document.getElementById('cloudSubtitle').textContent =
+      'Dia: ' + data.date.split('-').reverse().join('/') + ' · Mensagens: ' + data.totalMessages + ' · Palavras diferentes: ' + data.distinctWords;
+    layoutCloud();
+  } catch (err) {
+    document.getElementById('cloudBox').innerHTML = '<div class="wc-empty">Não consegui carregar a nuvem agora.</div>';
+  }
+}
+document.getElementById('cloudDate').value = todayBR();
+document.getElementById('cloudDate').max = todayBR();
+document.getElementById('cloudDate').addEventListener('change', loadCloud);
+window.addEventListener('resize', () => {
+  if (document.getElementById('tab-cloud').classList.contains('active')) layoutCloud();
+});
 
 let menuData = null;
 
@@ -2355,6 +2449,14 @@ export function startDashboardServer(
       trend.series = trend.series.map((s) => ({ ...s, name: formatDisplayName(s.name) }));
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(trend));
+    } else if (req.url.startsWith('/api/wordcloud')) {
+      const url = new URL(req.url, 'http://localhost');
+      const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+      const asked = url.searchParams.get('date');
+      const date = asked && /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(asked) ? asked : today;
+      const groupJid = getMainGroupJid();
+      const cloud = groupJid ? buildWordCloud(getTextsForDate(groupJid, date)) : { totalMessages: 0, distinctWords: 0, words: [] };
+      sendJson(res, 200, { date, ...cloud });
     } else if (req.url === '/api/me') {
       const session = getSession(req);
       sendJson(res, 200, { role: session?.role || 'viewer', name: session?.role === 'member' ? session.name : null });

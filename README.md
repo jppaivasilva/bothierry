@@ -180,6 +180,7 @@ Tudo em `src/` (JavaScript, módulos ES):
 | `displayNames.js` | **Nome padronizado** de cada pessoa (acento, maiúsculas, homônimos) — usado em **todo lugar**: painel, rankings do WhatsApp, `!resumo`, eventos, perguntas sobre dados e aniversários |
 | `morning.js` | Regras do bom dia: em quais dias sai (seg–sex + datas extras de fim de semana) e o texto de abertura |
 | `weather.js` | Previsão do tempo (Open-Meteo): dados por cidade e texto de reserva. Além das cidades fixas, aceita **cidades temporárias** com data de início e fim (`TEMPORARY_CITIES`; ex.: Tietê de 30/10 a 02/11) que saem sozinhas |
+| `wordcloud.js` | Conta as palavras do dia pra **nuvem de palavras** do painel (ignora links, menções, comandos, risadas e palavras comuns) |
 | `weeklyCard.js` | Desenha o **cartão do resumo semanal** (SVG → PNG), no estilo escuro do cartão de aniversário |
 | `audioUsage.js` | Conta quantas vezes cada áudio salvo foi chamado (`audio_usage.json`, só na VM) — alimenta o "áudio da semana" |
 | `weatherCard.js` | Desenha o **cartão de previsão** do bom dia (SVG → PNG com o resvg), estilo do painel |
@@ -299,6 +300,7 @@ A sessão é um cookie assinado com HMAC (30 dias), com o papel dentro da assina
 
 - **Visão geral** — mensagens por hora do dia (com 👑 de quem mais falou em cada hora) e **ranking** (Expediente 08h–18h ou dia completo, com seletor de data).
 - **Atividade** — tendência por pessoa (7/14/30 dias) e mapa de calor (dia da semana × hora).
+- **Nuvem** — nuvem de palavras do dia (escolha a data); palavras maiores = mais faladas.
 - **Membros** — todos do grupo, **ordenados pelo ranking de hoje** (quem não falou fica por último), com busca; clicar abre os detalhes da pessoa (pódio, horário preferido, últimos 14 dias). **Admin:** tocar na **foto** (ou no círculo com a inicial) abre o menu **Enviar/Trocar foto** e **Remover foto enviada** (volta pra do WhatsApp); o botão **➕ Adicionar pessoa** inclui na lista quem não está no grupo (ex.: Vini, Felipe Lopes) — ela ganha foto editável, entra na ligação dos aniversários e pode ser removida pelo mesmo menu. A foto enviada vale em todo o painel (ranking, campeões da hora, detalhes) e no cartão de aniversário.
 - **Comandos** — menu de todos os comandos, aniversariantes cadastrados e áudios salvos (o admin vê o ✕ pra apagar).
 - **Eventos** — próximos eventos com confirmados/ausentes, um nome por linha, e botões Vou / Não vou (para *member*). **Qualquer pessoa com acesso ao painel** (login comum, ou pelo link do `!painel`) pode **➕ Criar evento** (nome, data, horário, local e detalhes extras — mesmo formato do `!addevento`) e **🗑️ Excluir evento** em cada cartão (apaga junto a lista de confirmados). Ao criar, o **bot avisa no grupo** ("📣 Novo evento!", com quem criou, se a pessoa entrou pelo `!painel`). O nome identifica o evento, então não aceita dois com o mesmo nome (nem pelo `!addevento`). Quem entra pelo link do `!painel` já abre nesta aba.

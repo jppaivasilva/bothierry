@@ -629,3 +629,13 @@ export function getWindowSummary(groupJid, sinceTs, untilTs) {
 
   return { total: inWindow.length, prevTotal, ranking, peakHour, peakDayName, linkMessages, topLinkRepeats };
 }
+
+/**
+ * Textos (nao vazios) de um grupo numa data (YYYY-MM-DD, fuso de Brasilia),
+ * lendo o arquivo mensal se a data for mais antiga que a janela quente —
+ * usado pela nuvem de palavras do painel.
+ */
+export function getTextsForDate(groupJid, date) {
+  const rows = date >= getHotCutoffDate() ? cache : readArchiveFile(date);
+  return rows.filter((r) => r.groupJid === groupJid && r.messageDate === date && r.text).map((r) => r.text);
+}
