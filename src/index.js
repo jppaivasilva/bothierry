@@ -581,7 +581,17 @@ async function commandPoliciaFederal({ sock, groupJid }) {
 }
 
 async function commandOtario({ sock, groupJid, msg }) {
-  const repliedJid = msg.message?.extendedTextMessage?.contextInfo?.participant;
+  const contextInfo = msg.message?.extendedTextMessage?.contextInfo;
+  const repliedJid = contextInfo?.participant;
+
+  // Tentaram chamar o proprio bot de otario (respondendo a uma mensagem dele ou
+  // marcando ele): em vez de marcar, ele devolve a zoeira.
+  const botIdentifiers = [sock.user?.id, sock.user?.lid].filter(Boolean).map(jidNormalizedUser);
+  const targets = [repliedJid, ...(contextInfo?.mentionedJid || [])].filter(Boolean).map(jidNormalizedUser);
+  if (targets.some((jid) => botIdentifiers.includes(jid))) {
+    return sock.sendMessage(groupJid, { text: 'bela tentativa amigo' }, { quoted: msg });
+  }
+
   if (!repliedJid) {
     return sock.sendMessage(groupJid, { text: 'Responda a uma mensagem da pessoa com !otario pra marcar ela.' });
   }
