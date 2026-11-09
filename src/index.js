@@ -101,10 +101,6 @@ const ARCHIVE_HOUR = 3;
 // Horarios das mensagens automaticas de bom-dia e fim de expediente.
 const MORNING_HOUR = 8;
 const EVENING_HOUR = 18;
-// Propaganda (#ad) diaria no fim da noite. Dias no formato do cron (* = todo dia, 1-5 = seg a sex).
-const AD_HOUR = 22;
-const AD_MINUTE = 30;
-const AD_DAYS = '*';
 
 // Grupo (pelo nome, ja que Baileys nao indexa por nome) e expressao cron de
 // quando a foto tematica com a noticia mais importante nacionalmente e trocada.
@@ -894,7 +890,6 @@ const commands = {
   megasena: commandMegasena,
   policiafederal: commandPoliciaFederal,
   testareleicao: commandTestarEleicao,
-  testarpropaganda: commandTestarPropaganda,
   testarbomdia: commandTestarBomDia,
   testarnuvem: commandTestarNuvem,
   resumosemanal: commandResumoSemanal,
@@ -1125,35 +1120,6 @@ async function commandTestarAniversario({ sock, groupJid, args }) {
 
 // Mensagem automatica das 8h, mandada em todos os grupos que o bot participa.
 // So em dia util (o cron ja restringe a segunda-sexta) e fora de feriado nacional.
-// Propaganda da UniTV: foto (assets/propaganda-unitv.jpg) com a legenda na
-// mesma mensagem. Se a foto sumir, manda so o texto. A marcacao #ad precisa
-// ficar sempre visivel (publicidade paga).
-const AD_CAPTION = '*#ad* 📺 Cansou de pagar 6 streamings? UniTV: planos a partir de *R$ 25,00*. Cupom *GEFF10%OFF* 🎟️';
-
-async function sendAdToGroup(sock, groupJid) {
-  const imagePath = findImageAsset('propaganda-unitv');
-  const content = imagePath ? { image: fs.readFileSync(imagePath), caption: AD_CAPTION } : { text: AD_CAPTION };
-  const sent = await sock.sendMessage(groupJid, content);
-  if (sent?.key?.id) sentByBot.add(sent.key.id);
-  return sent;
-}
-
-async function sendAdMessage(sock) {
-  const participating = await fetchGroups(sock);
-  for (const groupJid of Object.keys(participating)) {
-    try {
-      await sendAdToGroup(sock, groupJid);
-    } catch (err) {
-      console.error(`Erro ao enviar propaganda para ${groupJid}:`, err);
-    }
-  }
-}
-
-// !testarpropaganda — manda a propaganda so no grupo onde foi digitado (pra ver como fica).
-async function commandTestarPropaganda({ sock, groupJid }) {
-  return sendAdToGroup(sock, groupJid);
-}
-
 // Bom dia: cartao de previsao em imagem (src/weatherCard.js) com o texto como
 // legenda. Se a previsao ou a imagem falharem, cai no texto com o bloco de
 // clima (ou so o bom dia, se nem a previsao veio). onlyGroupJid manda so num
@@ -2052,15 +2018,6 @@ cron.schedule(
   () => {
     recordCronRun('foto_bot_tema');
     if (currentSock) checkAndUpdateThemeAvatar(currentSock).catch((err) => console.error('Erro ao checar tema da foto do bot (cron):', err));
-  },
-  CRON_OPTIONS
-);
-
-cron.schedule(
-  `${AD_MINUTE} ${AD_HOUR} * * ${AD_DAYS}`,
-  () => {
-    recordCronRun('propaganda');
-    if (currentSock) sendAdMessage(currentSock).catch((err) => console.error('Erro ao enviar propaganda (cron):', err));
   },
   CRON_OPTIONS
 );
