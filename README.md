@@ -1,6 +1,6 @@
 # Bothierry — bot de WhatsApp do grupo
 
-Bot que conecta no WhatsApp (via [Baileys](https://github.com/WhiskeySockets/Baileys)), escuta as mensagens do grupo e grava localmente quem enviou o quê e quando. Com isso ele conta mensagens por pessoa, gera ranking e resumo da conversa, fiscaliza regras do grupo, manda avisos automáticos (bom dia, aniversários, propaganda) e mantém um **painel web** com gráficos, eventos e administração.
+Bot que conecta no WhatsApp (via [Baileys](https://github.com/WhiskeySockets/Baileys)), escuta as mensagens do grupo e grava localmente quem enviou o quê e quando. Com isso ele conta mensagens por pessoa, gera ranking e resumo da conversa, fiscaliza regras do grupo, manda avisos automáticos (bom dia, aniversários) e mantém um **painel web** com gráficos, eventos e administração.
 
 Não usa a API oficial da Meta: conecta como se fosse o "WhatsApp Web" de um número próprio, então não precisa de aprovação nem custa nada. Em troca, o número do bot precisa continuar logado (igual o WhatsApp Web normal).
 
@@ -189,7 +189,7 @@ Tudo em `src/` (JavaScript, módulos ES):
 | `elections.js` | Apuração do TSE (eleição 2026, já concluída) |
 | `report.js` | Relatório pelo terminal (`npm run report`) |
 
-Fora de `src/`: `deploy.sh` (deploy automático), `ecosystem.config.cjs` (PM2), `scripts/set-avatar.js` (associa foto a alguém na mão), `assets/` (foto-base do bot, imagens fixas, banner da propaganda, `fonts/` com a fonte Inter do cartão de previsão).
+Fora de `src/`: `deploy.sh` (deploy automático), `ecosystem.config.cjs` (PM2), `scripts/set-avatar.js` (associa foto a alguém na mão), `assets/` (foto-base do bot, imagens fixas, `fonts/` com a fonte Inter do cartão de previsão).
 
 **Nomes padronizados:** o mesmo nome (ex.: "Lucas Souza", "João Paulo", "Gabriel (Gabs)") aparece no painel, em `!ranking`, no ranking de fim de expediente e semanal, no `!resumo`, em `!eventos`/`!vou`/`!naovou`, nas respostas de perguntas sobre dados e nos aniversários — cartão, legenda, `!aniversariantes` e nome do grupo. Os apelidos da lista de aniversários (`birthdays.json`) só servem para achar o membro; quando há ligação, sai o nome padronizado dele. Para corrigir a grafia de alguém, edite o mapa em `src/displayNames.js`.
 
@@ -219,7 +219,7 @@ Tudo em arquivos na pasta do projeto, **na VM** (a maioria está no `.gitignore`
 | `audios/` | áudios tocáveis (`!nome`), `repetido.mp3` do aviso de link repetido | não |
 | `regras/`, `regulamento.txt`, `megasena.txt` | regras e textos fixos | não |
 | `avatars/`, `avatarbot/`, `*_state.json` | fotos em cache, fotos temáticas, estados internos | não |
-| `assets/` | foto-base do bot, imagens fixas, banner da propaganda | **sim** |
+| `assets/` | foto-base do bot, imagens fixas | **sim** |
 
 Como o painel é gerado pelo próprio bot, ele lê esses mesmos arquivos (mensagens, eventos, áudios, aniversariantes) — não existe banco separado.
 
@@ -243,7 +243,6 @@ Todas dentro do processo do bot (`node-cron`, fuso `America/Sao_Paulo`, tolerân
 | 18:00 (seg–sex) | ranking do expediente (08h–18h), seguido do **cartão da nuvem de palavras do dia** (pula se o dia teve menos de 5 palavras diferentes) |
 | 18:05 (sexta) | ranking semanal |
 | 21:00 (domingo) | **resumo semanal** — cartão grande com os últimos 7 dias (campeão, top 5, total vs. semana anterior, horário de pico, links, áudio mais usado) |
-| **22:30 (todo dia)** | **propaganda (#ad)**: banner + legenda (`AD_HOUR`/`AD_MINUTE`/`AD_DAYS` em `index.js`) |
 
 Além disso, ao conectar o bot checa aniversário, nome do grupo, tema da foto e fotos de perfil (catch-up se ele ficou desligado na hora exata).
 
@@ -332,7 +331,6 @@ Use `!` ou `/` no começo. `!menu` lista tudo no próprio WhatsApp (e a aba **Co
 | `!salvaraudio nome` | responda um áudio: salva com o nome escolhido e vira `!nome` |
 | `!regras` · `!regulamento` · `!megasena` | textos fixos |
 | `!policiafederal` · `!otario` | zoeiras |
-| `!testarpropaganda` *(oculto)* | manda a propaganda só no grupo onde for digitado |
 | `!testarbomdia` *(oculto)* | manda o bom dia (com o cartão de previsão) só no grupo onde for digitado |
 | `!testarnuvem` *(oculto)* | manda o cartão da nuvem de palavras de hoje só no grupo onde for digitado |
 | `!resumosemanal` *(oculto)* | manda o resumo semanal (cartão) só no grupo onde for digitado |
@@ -351,7 +349,6 @@ Use `!` ou `/` no começo. `!menu` lista tudo no próprio WhatsApp (e a aba **Co
 - **Marcos do dia:** avisa quando alguém bate exatamente 50 ou 100 mensagens.
 - **Aniversários:** manda um **cartão com a foto** do aniversariante (resolução cheia do WhatsApp; se a privacidade bloquear, usa a do cache ou a inicial do nome) e renomeia o grupo pra `🎉 Parabéns, Nome! 🎂` às 9h e volta ao nome que ele tinha antes na meia-noite (precisa ser admin do grupo).
 - **Foto temática do bot** em datas comemorativas (Natal, Ano Novo, Halloween, Carnaval, Páscoa, Festa Junina), com imagens de `avatarbot/`.
-- **Propaganda (#ad)** diária às 22:30.
 
 ---
 
