@@ -19,6 +19,10 @@ const TEMPORARY_CITIES = [
   { name: 'Tietê', lat: -23.1019, lon: -47.7147, from: '2026-10-30', until: '2026-11-02' },
 ];
 
+// Cidades de brincadeira: previsao fixa, sem consultar a Open-Meteo. Aparecem
+// sempre no fim da lista (so quando as cidades de verdade tiveram previsao).
+const FAKE_CITIES = [{ name: 'Vice City', emoji: '☀️', desc: 'sol', kind: 'sun', min: 29, max: 36, chuva: 0 }];
+
 // Cidades da previsao de hoje: as fixas + as temporarias cujo periodo inclui a data.
 function getActiveCities(now = new Date()) {
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(now);
@@ -92,7 +96,8 @@ async function fetchCityForecast(city) {
  */
 export async function getWeatherData(now = new Date()) {
   const results = await Promise.allSettled(getActiveCities(now).map(fetchCityForecast));
-  return results.filter((r) => r.status === 'fulfilled').map((r) => r.value);
+  const real = results.filter((r) => r.status === 'fulfilled').map((r) => r.value);
+  return real.length > 0 ? [...real, ...FAKE_CITIES] : real;
 }
 
 /**
