@@ -39,7 +39,7 @@ import { recordConnectionEvent, recordMessage, recordCommandUsage, recordCronRun
 import { startDashboardServer, createLoginToken } from './dashboard.js';
 import { getWeatherData, formatWeatherBlock } from './weather.js';
 import { renderWeatherCard } from './weatherCard.js';
-import { shouldSendMorning, isWeekend, morningGreeting } from './morning.js';
+import { shouldSendMorning, isWeekend, morningGreeting, morningTheme } from './morning.js';
 import { renderBirthdayCard, photoToDataUri } from './birthdayCard.js';
 import { renderWeeklyCard } from './weeklyCard.js';
 import { renderWordCloudCard } from './wordcloudCard.js';
@@ -1124,12 +1124,13 @@ async function commandTestarAniversario({ sock, groupJid, args }) {
 // legenda. Se a previsao ou a imagem falharem, cai no texto com o bloco de
 // clima (ou so o bom dia, se nem a previsao veio). onlyGroupJid manda so num
 // grupo (usado pelo !testarbomdia).
-async function sendMorningMessage(sock, onlyGroupJid = null) {
+async function sendMorningMessage(sock, onlyGroupJid = null, themeOverride = null) {
   const { date: today } = getBrasiliaNow();
+  const theme = themeOverride || morningTheme(today);
   const holidayName = await getHolidayName(today);
 
   const diaSemana = new Intl.DateTimeFormat('pt-BR', { timeZone: TIMEZONE, weekday: 'long' }).format(new Date());
-  let text = morningGreeting({ diaSemana, holidayName, weekend: isWeekend(today) });
+  let text = morningGreeting({ diaSemana, holidayName, weekend: isWeekend(today), theme });
 
   // Previsao do tempo e so um complemento — se a API estiver fora do ar, o
   // bom dia sai do mesmo jeito, so sem o clima.
@@ -1143,7 +1144,7 @@ async function sendMorningMessage(sock, onlyGroupJid = null) {
   let image = null;
   if (weather.length > 0) {
     try {
-      image = await renderWeatherCard(weather);
+      image = await renderWeatherCard(weather, theme);
     } catch (err) {
       console.error('Erro ao montar o cartao de previsao (mandando em texto):', err);
       text += `\n\n${formatWeatherBlock(weather)}`;
@@ -1162,8 +1163,10 @@ async function sendMorningMessage(sock, onlyGroupJid = null) {
 }
 
 // !testarbomdia — manda o bom dia so no grupo onde foi digitado (pra ver como fica).
-async function commandTestarBomDia({ sock, groupJid }) {
-  await sendMorningMessage(sock, groupJid);
+// "!testarbomdia gtavi" mostra a versao tematica do lancamento do GTA VI.
+async function commandTestarBomDia({ sock, groupJid, args }) {
+  const theme = String(args ?? '').trim().toLowerCase() === 'gtavi' ? 'gtavi' : null;
+  await sendMorningMessage(sock, groupJid, theme);
 }
 
 // Resumo semanal: cartao grande (src/weeklyCard.js) com os ultimos 7 dias do
