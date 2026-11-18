@@ -42,6 +42,7 @@ import { renderWeatherCard } from './weatherCard.js';
 import { shouldSendMorning, isWeekend, morningGreeting, morningTheme } from './morning.js';
 import { renderBirthdayCard, photoToDataUri } from './birthdayCard.js';
 import { renderWeeklyCard } from './weeklyCard.js';
+import { renderPremiereCard } from './premiereCard.js';
 import { renderWordCloudCard } from './wordcloudCard.js';
 import { buildWordCloud } from './wordcloud.js';
 import { recordAudioUse, getTopAudioSince } from './audioUsage.js';
@@ -891,6 +892,7 @@ const commands = {
   policiafederal: commandPoliciaFederal,
   testareleicao: commandTestarEleicao,
   testarbomdia: commandTestarBomDia,
+  testarestreia: commandTestarEstreia,
   testarnuvem: commandTestarNuvem,
   resumosemanal: commandResumoSemanal,
   testaraniversario: commandTestarAniversario,
@@ -1258,6 +1260,51 @@ async function commandTestarNuvem({ sock, groupJid }) {
     console.error('Erro ao montar a nuvem de palavras:', err);
     await sock.sendMessage(groupJid, { text: 'Não consegui montar a nuvem agora.' });
   }
+}
+
+// Estreia do GTA VI: cartao (src/premiereCard.js) mandado uma unica vez, a
+// meia-noite de 19/11/2026, marcando todo mundo do grupo (mentionAll). Um
+// arquivo de estado evita mandar duas vezes; se o bot estava fora do ar a
+// meia-noite, manda assim que reconectar (ate o meio-dia do mesmo dia).
+const PREMIERE_DATE = '2026-11-19';
+const PREMIERE_STATE_FILE = path.join(__dirname, '..', 'estreia_state.json');
+const PREMIERE_CAPTION = '🌴🎮 *É HOJE!* Bem-vindos a *Vice City*! 🌅';
+
+async function sendPremiereCard(sock, { onlyGroupJid = null, mentionAll = true } = {}) {
+  const image = await renderPremiereCard();
+  const groupJids = onlyGroupJid ? [onlyGroupJid] : Object.keys(await fetchGroups(sock));
+  for (const groupJid of groupJids) {
+    try {
+      let sent;
+      try {
+        sent = await sock.sendMessage(groupJid, { image, caption: PREMIERE_CAPTION, ...(mentionAll ? { mentionAll: true } : {}) });
+      } catch (err) {
+        console.error(`Erro ao marcar todos no cartao da estreia (${groupJid}), mandando sem marcar:`, err);
+        sent = await sock.sendMessage(groupJid, { image, caption: PREMIERE_CAPTION });
+      }
+      if (sent?.key?.id) sentByBot.add(sent.key.id);
+    } catch (err) {
+      console.error(`Erro ao enviar o cartao da estreia para ${groupJid}:`, err);
+    }
+  }
+}
+
+async function checkAndSendPremiere(sock) {
+  const { date, time } = getBrasiliaNow();
+  // % 24: algumas versoes do Intl devolvem "24:00" a meia-noite.
+  if (date !== PREMIERE_DATE || Number(time.slice(0, 2)) % 24 >= 12) return;
+  try {
+    if (JSON.parse(fs.readFileSync(PREMIERE_STATE_FILE, 'utf-8')).sent) return;
+  } catch {
+    // sem arquivo de estado: ainda nao foi mandado
+  }
+  fs.writeFileSync(PREMIERE_STATE_FILE, JSON.stringify({ sent: true, at: new Date().toISOString() }));
+  await sendPremiereCard(sock);
+}
+
+// !testarestreia — manda o cartao da estreia so no grupo onde foi digitado (sem marcar todo mundo).
+async function commandTestarEstreia({ sock, groupJid }) {
+  await sendPremiereCard(sock, { onlyGroupJid: groupJid, mentionAll: false });
 }
 
 // Mensagem automatica das 18h: soma o tempo "perdido" e o ranking completo do
@@ -2070,6 +2117,15 @@ cron.schedule(
 );
 
 cron.schedule(
+  '0 0 19 11 *',
+  () => {
+    recordCronRun('estreia_gtavi');
+    if (currentSock) checkAndSendPremiere(currentSock).catch((err) => console.error('Erro ao enviar o cartao da estreia (cron):', err));
+  },
+  CRON_OPTIONS
+);
+
+cron.schedule(
   '0 21 * * 0',
   () => {
     recordCronRun('resumo_semanal');
@@ -2197,6 +2253,7 @@ async function startBot() {
       // Confere logo ao conectar se a foto do bot precisa mudar de tema (ex:
       // bot ficou desligado e passou pra data de um evento sem ninguem notar).
       checkAndUpdateThemeAvatar(sock).catch((err) => console.error('Erro ao checar tema da foto do bot:', err));
+      checkAndSendPremiere(sock).catch((err) => console.error('Erro ao checar o cartao da estreia:', err));
       // Sincroniza fotos de perfil ao conectar tambem (alem do cron diario),
       // assim o painel ja mostra foto de todo mundo sem esperar ate 03h30.
       (async () => {

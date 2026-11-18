@@ -1202,6 +1202,7 @@ async function refresh() {
     foto_grupo_noticia: 'Foto do grupo (notícia)',
     ranking_semanal: 'Ranking semanal',
     resumo_semanal: 'Resumo semanal (domingo 21h)',
+    estreia_gtavi: 'Cartão da estreia do GTA VI (19/11, 00h)',
   };
   const cronsBody = document.getElementById('cronsBody');
   const cronRows = Object.entries(CRON_LABELS).map(([key, label]) => {
