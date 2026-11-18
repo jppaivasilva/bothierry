@@ -1789,6 +1789,9 @@ function getBrasiliaNow() {
 const AVATAR_DIR = path.join(__dirname, '..', 'avatarbot');
 const AVATAR_STATE_FILE = path.join(__dirname, '..', 'avatar_state.json');
 const AVATAR_DEFAULT_FILE = 'BoThierry_Default.jpeg';
+// Temas que vem junto com o repositorio (assets/themes/): usados quando o
+// arquivo nao esta em avatarbot/ (que so existe na VM e nao vai pro git).
+const BUNDLED_THEMES_DIR = path.join(__dirname, '..', 'assets', 'themes');
 
 // Algoritmo anonimo gregoriano pra calcular a data (UTC) do Domingo de Pascoa
 // de um ano — usado pra derivar tambem o Carnaval, ja que ambos sao datas
@@ -1819,6 +1822,8 @@ function daysBetween(dateStr, referenceDate) {
 // Ordem importa: a primeira que bater vence (evita, por ex., Pascoa e
 // Carnaval se sobrepondo num ano estranho).
 const AVATAR_THEMES = [
+  // Lancamento do GTA VI (19/11/2026): do dia 18 ao 20.
+  { name: 'GTAVI', file: 'BoThierry_GTAVI.jpg', matches: (month, day, dateStr) => dateStr >= '2026-11-18' && dateStr <= '2026-11-20' },
   {
     name: 'AnoNovo',
     file: 'BoThierry_AnoNovo.png',
@@ -1875,16 +1880,16 @@ function setLastAvatarTheme(themeName) {
  * de fato quando o tema muda (idempotente entre chamadas do mesmo dia).
  */
 async function checkAndUpdateThemeAvatar(sock) {
-  if (!fs.existsSync(AVATAR_DIR)) return;
-
   const { date: today } = getBrasiliaNow();
   const theme = getThemeForDate(today);
   const themeName = theme?.name || 'Default';
 
   if (getLastAvatarTheme() === themeName) return;
 
-  const filePath = path.join(AVATAR_DIR, theme?.file || AVATAR_DEFAULT_FILE);
-  if (!fs.existsSync(filePath)) return;
+  const fileName = theme?.file || AVATAR_DEFAULT_FILE;
+  const candidates = [path.join(AVATAR_DIR, fileName), path.join(BUNDLED_THEMES_DIR, fileName)];
+  const filePath = candidates.find((f) => fs.existsSync(f));
+  if (!filePath) return;
 
   try {
     const sharp = await getSharp();

@@ -348,7 +348,7 @@ Use `!` ou `/` no começo. `!menu` lista tudo no próprio WhatsApp (e a aba **Co
 - **Insulto ao bot** (mencionando @Bothierry): a IA classifica — 1º e 2º viram aviso, o **3º resulta em remoção do grupo** (ação real e irreversível pelo bot).
 - **Marcos do dia:** avisa quando alguém bate exatamente 50 ou 100 mensagens.
 - **Aniversários:** manda um **cartão com a foto** do aniversariante (resolução cheia do WhatsApp; se a privacidade bloquear, usa a do cache ou a inicial do nome) e renomeia o grupo pra `🎉 Parabéns, Nome! 🎂` às 9h e volta ao nome que ele tinha antes na meia-noite (precisa ser admin do grupo).
-- **Foto temática do bot** em datas comemorativas (Natal, Ano Novo, Halloween, Carnaval, Páscoa, Festa Junina), com imagens de `avatarbot/`.
+- **Foto temática do bot** em datas comemorativas (Natal, Ano Novo, Halloween, Carnaval, Páscoa, Festa Junina), com imagens de `avatarbot/` (na VM) ou, se o arquivo não estiver lá, de `assets/themes/` (vai junto com o repositório — é o caso do tema **GTAVI**, de 18 a 20/11/2026).
 
 ---
 
