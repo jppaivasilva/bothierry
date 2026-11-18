@@ -182,6 +182,7 @@ Tudo em `src/` (JavaScript, módulos ES):
 | `weather.js` | Previsão do tempo (Open-Meteo): dados por cidade e texto de reserva. Além das cidades fixas, aceita **cidades temporárias** com data de início e fim (`TEMPORARY_CITIES`; ex.: Tietê de 30/10 a 02/11) que saem sozinhas Tem também cidades de **brincadeira** com previsão fixa (`FAKE_CITIES`, hoje a *Vice City*: sol, 36°). |
 | `wordcloudCard.js` | Desenha o **cartão da nuvem de palavras** (mesmo layout em espiral do painel, feito no servidor com o resvg) |
 | `wordcloud.js` | Conta as palavras do dia pra **nuvem de palavras** do painel (ignora links, menções, comandos, risadas e palavras comuns) |
+| `premiereCard.js` | Desenha o **cartão da estreia do GTA VI** (Vice City, "VI" neon, grade) |
 | `weeklyCard.js` | Desenha o **cartão do resumo semanal** (SVG → PNG), no estilo escuro do cartão de aniversário |
 | `audioUsage.js` | Conta quantas vezes cada áudio salvo foi chamado (`audio_usage.json`, só na VM) — alimenta o "áudio da semana" |
 | `weatherCard.js` | Desenha o **cartão de previsão** do bom dia (SVG → PNG com o resvg), estilo do painel; tem o tema alternativo `gtavi` (Vice City) |
@@ -242,6 +243,7 @@ Todas dentro do processo do bot (`node-cron`, fuso `America/Sao_Paulo`, tolerân
 | 09:00 | aviso de aniversariantes (**cartão em imagem** com a foto; texto se falhar) + renomeia o grupo |
 | 18:00 (seg–sex) | ranking do expediente (08h–18h), seguido do **cartão da nuvem de palavras do dia** (pula se o dia teve menos de 5 palavras diferentes) |
 | 18:05 (sexta) | ranking semanal |
+| 00:00 de 19/11/2026 (uma vez) | **cartão da estreia do GTA VI** marcando todo o grupo (`mentionAll`); se o bot estava fora do ar, manda ao reconectar até o meio-dia |
 | 21:00 (domingo) | **resumo semanal** — cartão grande com os últimos 7 dias (campeão, top 5, total vs. semana anterior, horário de pico, links, áudio mais usado) |
 
 Além disso, ao conectar o bot checa aniversário, nome do grupo, tema da foto e fotos de perfil (catch-up se ele ficou desligado na hora exata).
@@ -332,6 +334,7 @@ Use `!` ou `/` no começo. `!menu` lista tudo no próprio WhatsApp (e a aba **Co
 | `!regras` · `!regulamento` · `!megasena` | textos fixos |
 | `!policiafederal` · `!otario` | zoeiras |
 | `!testarbomdia` *(oculto)* | manda o bom dia (com o cartão de previsão) só no grupo onde for digitado; `!testarbomdia gtavi` mostra a versão Vice City |
+| `!testarestreia` *(oculto)* | manda o cartão da estreia só no grupo onde for digitado (sem marcar todo mundo) |
 | `!testarnuvem` *(oculto)* | manda o cartão da nuvem de palavras de hoje só no grupo onde for digitado |
 | `!resumosemanal` *(oculto)* | manda o resumo semanal (cartão) só no grupo onde for digitado |
 | `!testaraniversario [nome]` *(oculto)* | manda o cartão de aniversário só no grupo onde for digitado (do nome informado, ou do próximo aniversariante) |

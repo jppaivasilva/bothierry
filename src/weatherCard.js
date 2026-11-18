@@ -56,9 +56,9 @@ const drop = (x, y, fill) =>
   `<path transform="translate(${x},${y})" d="M0 -14 C8 -4 12 2 12 8 A12 12 0 0 1 -12 8 C-12 2 -8 -4 0 -14Z" fill="${fill}"/>`;
 
 // Palmeira em silhueta (base em x,y) pro tema Vice City.
-function palm(x, y, scale, flip) {
+export function palm(x, y, scale, flip, fill = '#1a0a2e') {
   const leaf = (a, len, w) => `<path d="M0 0 Q ${len * 0.5} ${-w} ${len} ${len * 0.12} Q ${len * 0.5} ${-w * 0.2} 0 0 Z" transform="rotate(${a})"/>`;
-  return `<g transform="translate(${x},${y}) scale(${flip ? -scale : scale},${scale})" fill="#1a0a2e">
+  return `<g transform="translate(${x},${y}) scale(${flip ? -scale : scale},${scale})" fill="${fill}">
     <path d="M-4 0 Q 34 -220 62 -420 L 74 -420 Q 48 -210 10 0 Z"/>
     <g transform="translate(68,-420)">${[-170, -140, -105, -70, -35, -5, 25].map((a, i) => leaf(a, 190 - Math.abs(i - 3) * 12, 50)).join('')}</g>
   </g>`;
