@@ -178,13 +178,13 @@ Tudo em `src/` (JavaScript, módulos ES):
 | `groupPhoto.js` | Foto do grupo/bot editada por IA |
 | `avatars.js` | Cache de fotos de perfil dos membros |
 | `displayNames.js` | **Nome padronizado** de cada pessoa (acento, maiúsculas, homônimos) — usado em **todo lugar**: painel, rankings do WhatsApp, `!resumo`, eventos, perguntas sobre dados e aniversários |
-| `morning.js` | Regras do bom dia: em quais dias sai (seg–sex + datas extras de fim de semana) e o texto de abertura |
+| `morning.js` | Regras do bom dia: em quais dias sai (seg–sex + datas extras de fim de semana) o texto de abertura e o **tema do cartão** por data (`morningTheme`: Vice City no dia do GTA VI, 19/11/2026) |
 | `weather.js` | Previsão do tempo (Open-Meteo): dados por cidade e texto de reserva. Além das cidades fixas, aceita **cidades temporárias** com data de início e fim (`TEMPORARY_CITIES`; ex.: Tietê de 30/10 a 02/11) que saem sozinhas |
 | `wordcloudCard.js` | Desenha o **cartão da nuvem de palavras** (mesmo layout em espiral do painel, feito no servidor com o resvg) |
 | `wordcloud.js` | Conta as palavras do dia pra **nuvem de palavras** do painel (ignora links, menções, comandos, risadas e palavras comuns) |
 | `weeklyCard.js` | Desenha o **cartão do resumo semanal** (SVG → PNG), no estilo escuro do cartão de aniversário |
 | `audioUsage.js` | Conta quantas vezes cada áudio salvo foi chamado (`audio_usage.json`, só na VM) — alimenta o "áudio da semana" |
-| `weatherCard.js` | Desenha o **cartão de previsão** do bom dia (SVG → PNG com o resvg), estilo do painel |
+| `weatherCard.js` | Desenha o **cartão de previsão** do bom dia (SVG → PNG com o resvg), estilo do painel; tem o tema alternativo `gtavi` (Vice City) |
 | `news.js` | Manchetes do G1 (RSS), usadas pela foto do grupo |
 | `elections.js` | Apuração do TSE (eleição 2026, já concluída) |
 | `report.js` | Relatório pelo terminal (`npm run report`) |
@@ -331,7 +331,7 @@ Use `!` ou `/` no começo. `!menu` lista tudo no próprio WhatsApp (e a aba **Co
 | `!salvaraudio nome` | responda um áudio: salva com o nome escolhido e vira `!nome` |
 | `!regras` · `!regulamento` · `!megasena` | textos fixos |
 | `!policiafederal` · `!otario` | zoeiras |
-| `!testarbomdia` *(oculto)* | manda o bom dia (com o cartão de previsão) só no grupo onde for digitado |
+| `!testarbomdia` *(oculto)* | manda o bom dia (com o cartão de previsão) só no grupo onde for digitado; `!testarbomdia gtavi` mostra a versão Vice City |
 | `!testarnuvem` *(oculto)* | manda o cartão da nuvem de palavras de hoje só no grupo onde for digitado |
 | `!resumosemanal` *(oculto)* | manda o resumo semanal (cartão) só no grupo onde for digitado |
 | `!testaraniversario [nome]` *(oculto)* | manda o cartão de aniversário só no grupo onde for digitado (do nome informado, ou do próximo aniversariante) |

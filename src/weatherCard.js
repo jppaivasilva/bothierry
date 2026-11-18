@@ -55,6 +55,27 @@ const text = (x, y, txt, size, weight, fill, anchor = 'start') =>
 const drop = (x, y, fill) =>
   `<path transform="translate(${x},${y})" d="M0 -14 C8 -4 12 2 12 8 A12 12 0 0 1 -12 8 C-12 2 -8 -4 0 -14Z" fill="${fill}"/>`;
 
+// Palmeira em silhueta (base em x,y) pro tema Vice City.
+function palm(x, y, scale, flip) {
+  const leaf = (a, len, w) => `<path d="M0 0 Q ${len * 0.5} ${-w} ${len} ${len * 0.12} Q ${len * 0.5} ${-w * 0.2} 0 0 Z" transform="rotate(${a})"/>`;
+  return `<g transform="translate(${x},${y}) scale(${flip ? -scale : scale},${scale})" fill="#1a0a2e">
+    <path d="M-4 0 Q 34 -220 62 -420 L 74 -420 Q 48 -210 10 0 Z"/>
+    <g transform="translate(68,-420)">${[-170, -140, -105, -70, -35, -5, 25].map((a, i) => leaf(a, 190 - Math.abs(i - 3) * 12, 50)).join('')}</g>
+  </g>`;
+}
+
+// Cores do cartao por tema: 'light' (padrao, estilo do painel) e 'gtavi' (Vice City, dia do lancamento do GTA VI).
+const THEMES = {
+  light: {
+    title: 'Bom dia, grupo!', titleFill: 'rgba(0,0,0,.85)', subFill: 'rgba(60,60,67,.65)', nameFill: 'rgba(0,0,0,.85)', descFill: 'rgba(60,60,67,.65)',
+    maxFill: 'rgba(0,0,0,.88)', minFill: 'rgba(60,60,67,.55)', lineStroke: 'rgba(60,60,67,.12)', cardFill: '#fff', cardOpacity: '.6', footFill: 'rgba(60,60,67,.55)', extraBottom: 0,
+  },
+  gtavi: {
+    title: 'Bom dia, Vice City!', titleFill: '#ffffff', subFill: 'rgba(255,255,255,.75)', nameFill: '#ffffff', descFill: 'rgba(255,255,255,.7)',
+    maxFill: '#ffffff', minFill: '#ff8fc0', lineStroke: 'rgba(255,255,255,.18)', cardFill: '#1a0a2e', cardOpacity: '.55', footFill: '#2b0f5e', extraBottom: 90,
+  },
+};
+
 const capitalize = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
 
 function dateLabel(now = new Date()) {
@@ -77,22 +98,23 @@ async function getBotPhotoDataUri() {
   return photoDataUri;
 }
 
-function buildSvg(cities, photo) {
+function buildSvg(cities, photo, themeName = 'light') {
+  const T = THEMES[themeName] || THEMES.light;
   const n = cities.length;
   const cardHeight = 320 + (n - 1) * ROW_HEIGHT;
-  const height = 240 + cardHeight + 110;
+  const height = 240 + cardHeight + 110 + T.extraBottom;
 
   let rows = '';
   cities.forEach((c, i) => {
     const y = 330 + i * ROW_HEIGHT;
     const rainStrong = c.chuva >= 40;
     rows += `<g>
-      ${i > 0 ? `<line x1="90" y1="${y - 22}" x2="990" y2="${y - 22}" stroke="rgba(60,60,67,.12)" stroke-width="2"/>` : ''}
+      ${i > 0 ? `<line x1="90" y1="${y - 22}" x2="990" y2="${y - 22}" stroke="${T.lineStroke}" stroke-width="2"/>` : ''}
       ${icon(c.kind, 150, y + 52)}
-      ${text(250, y + 40, c.name, 40, 700, 'rgba(0,0,0,.85)')}
-      ${text(250, y + 84, capitalize(c.desc), 28, 500, 'rgba(60,60,67,.65)')}
-      ${text(800, y + 62, `${c.max}°`, 62, 800, 'rgba(0,0,0,.88)', 'end')}
-      ${text(878, y + 62, `${c.min}°`, 40, 600, 'rgba(60,60,67,.55)')}
+      ${text(250, y + 40, c.name, 40, 700, T.nameFill)}
+      ${text(250, y + 84, capitalize(c.desc), 28, 500, T.descFill)}
+      ${text(800, y + 62, `${c.max}°`, 62, 800, T.maxFill, 'end')}
+      ${text(878, y + 62, `${c.min}°`, 40, 600, T.minFill)}
       <rect x="800" y="${y + 80}" width="190" height="40" rx="20" fill="url(#pill)" opacity="${rainStrong ? 1 : 0.55}"/>
       ${drop(826, y + 100, '#fff')}${text(922, y + 108, `${c.chuva}%`, 26, 700, '#fff', 'middle')}
     </g>`;
@@ -107,17 +129,20 @@ function buildSvg(cities, photo) {
     <linearGradient id="sunG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFD54A"/><stop offset="1" stop-color="#FF9F1A"/></linearGradient>
     <linearGradient id="bgLight" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#bcd8ff"/><stop offset=".55" stop-color="#e3d6f7"/><stop offset="1" stop-color="#cdeede"/></linearGradient>
     <linearGradient id="pill" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#2F8BFF"/><stop offset="1" stop-color="#8F6BFF"/></linearGradient>
+    <linearGradient id="bgVice" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2b0f5e"/><stop offset=".4" stop-color="#8a1fa8"/><stop offset=".7" stop-color="#ff3d8b"/><stop offset="1" stop-color="#ff8a3d"/></linearGradient>
+    <linearGradient id="sunVice" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe66d"/><stop offset="1" stop-color="#ff4f8b"/></linearGradient>
     <clipPath id="circ"><circle cx="0" cy="0" r="52"/></clipPath>
     <filter id="sh" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="14" stdDeviation="22" flood-color="#1f2937" flood-opacity=".16"/></filter>
   </defs>
-  <rect width="${WIDTH}" height="${height}" fill="url(#bgLight)"/>
-  <circle cx="140" cy="120" r="260" fill="#fff" opacity=".35"/><circle cx="1000" cy="${height - 100}" r="300" fill="#b894ff" opacity=".25"/>
+  ${themeName === 'gtavi'
+    ? `<rect width="${WIDTH}" height="${height}" fill="url(#bgVice)"/><circle cx="540" cy="${height - 10}" r="230" fill="url(#sunVice)" opacity=".9"/>${palm(70, height, 0.42, false)}${palm(1010, height, 0.42, true)}`
+    : `<rect width="${WIDTH}" height="${height}" fill="url(#bgLight)"/><circle cx="140" cy="120" r="260" fill="#fff" opacity=".35"/><circle cx="1000" cy="${height - 100}" r="300" fill="#b894ff" opacity=".25"/>`}
   ${header}
-  ${text(photo ? 190 : 60, 114, 'Bom dia, grupo!', 54, 800, 'rgba(0,0,0,.85)')}
-  ${text(photo ? 190 : 60, 158, dateLabel(), 32, 500, 'rgba(60,60,67,.65)')}
-  <rect x="50" y="240" width="980" height="${cardHeight}" rx="48" fill="#fff" fill-opacity=".6" filter="url(#sh)"/>
+  ${text(photo ? 190 : 60, 114, T.title, 54, 800, T.titleFill)}
+  ${text(photo ? 190 : 60, 158, dateLabel(), 32, 500, T.subFill)}
+  <rect x="50" y="240" width="980" height="${cardHeight}" rx="48" fill="${T.cardFill}" fill-opacity="${T.cardOpacity}" filter="url(#sh)"/>
   ${rows}
-  ${text(540, height - 54, 'Previsão para hoje · Open-Meteo', 24, 500, 'rgba(60,60,67,.55)', 'middle')}
+  ${text(540, height - 54, themeName === 'gtavi' ? 'Previsão para hoje · Vice City edition · Open-Meteo' : 'Previsão para hoje · Open-Meteo', 24, 500, T.footFill, 'middle')}
 </svg>`;
 }
 
@@ -127,10 +152,10 @@ function buildSvg(cities, photo) {
  * Lanca erro se nao houver cidades ou se a renderizacao falhar — quem chama
  * cai no texto simples.
  */
-export async function renderWeatherCard(cities) {
+export async function renderWeatherCard(cities, themeName = 'light') {
   if (!cities || cities.length === 0) throw new Error('sem cidades pra desenhar');
   const photo = await getBotPhotoDataUri();
-  const svg = buildSvg(cities, photo);
+  const svg = buildSvg(cities, photo, themeName);
   const resvg = new Resvg(svg, {
     font: { fontFiles: FONT_FILES, loadSystemFonts: false, defaultFontFamily: 'Inter' },
   });
