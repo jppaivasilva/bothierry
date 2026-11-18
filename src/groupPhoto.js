@@ -7,7 +7,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const BOT_PHOTO_PATH = path.join(__dirname, '..', 'assets', 'bot-photo.png');
 
 const CHAT_MODEL = 'gpt-4o-mini';
-const IMAGE_MODEL = 'gpt-image-1';
+// gpt-image-1 saiu da conta (erro 'model does not exist' em 02/11/2026); a chave
+// enxerga gpt-image-2, gpt-image-1.5 e gpt-image-1-mini. Pra trocar de modelo sem
+// mexer no codigo, defina OPENAI_IMAGE_MODEL no .env da VM.
+const IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1.5';
 
 // Palavras-chave de altissima relevancia nacional — manchetes que batem aqui
 // sao colocadas no topo da lista antes de mandar pra IA, como um "boost" de

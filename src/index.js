@@ -105,7 +105,7 @@ const EVENING_HOUR = 18;
 // Grupo (pelo nome, ja que Baileys nao indexa por nome) e expressao cron de
 // quando a foto tematica com a noticia mais importante nacionalmente e trocada.
 // Hoje: segunda e quarta as 08h (horario de Brasilia) — 2x por semana, pra
-// economizar no custo do gpt-image-1 (o item mais caro do bot de longe).
+// economizar no custo da geracao de imagem (o item mais caro do bot de longe).
 const GROUP_PHOTO_CRON = '0 8 * * 1,3';
 
 // Janela de tempo em que um link repetido e avisado pelo bot.

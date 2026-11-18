@@ -255,7 +255,7 @@ Além disso, ao conectar o bot checa aniversário, nome do grupo, tema da foto e
 | **WhatsApp** (via Baileys) | receber/enviar mensagens, renomear grupo, fotos | sessão em `auth_info/` |
 | **OpenAI** — `gpt-4o-mini` | `!resumo`, regra do iPhone, insultos ao bot, perguntas sobre dados, escolher o tema da foto do grupo a partir da notícia | `OPENAI_API_KEY` |
 | **OpenAI** — `whisper-1` | `!transcrever` | `OPENAI_API_KEY` |
-| **OpenAI** — `gpt-image-1` | edição da foto do grupo/bot (o item mais caro do bot) | `OPENAI_API_KEY` |
+| **OpenAI** — `gpt-image-1.5` (troca por `OPENAI_IMAGE_MODEL`) | edição da foto do grupo/bot (o item mais caro do bot) | `OPENAI_API_KEY` |
 | **G1** (RSS) | notícia da foto do grupo | não |
 | **Open-Meteo** | previsão do tempo do bom dia (vira o cartão em imagem) | não |
 | **BrasilAPI** | feriados nacionais | não |
