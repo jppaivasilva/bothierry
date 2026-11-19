@@ -1051,7 +1051,19 @@ async function announceNewEvent(event, createdBy) {
 
 // Manda o aviso de aniversario num grupo: cartao em imagem com a legenda; se o
 // cartao nao puder ser gerado, manda so o texto (como era antes).
-async function sendBirthdayToGroup(sock, groupJid, rawPeople) {
+// Foto do grupo a partir do cartao: o cartao e vertical (1080x1350) e a foto do
+// grupo e quadrada/redonda, entao o cartao inteiro entra centralizado (nada
+// cortado) sobre uma versao borrada dele mesmo preenchendo as laterais.
+async function birthdayCardToGroupPhoto(card) {
+  const sharp = await getSharp();
+  const background = await sharp(card).resize(640, 640, { fit: 'cover' }).blur(28).toBuffer();
+  const foreground = await sharp(card).resize({ height: 640 }).toBuffer();
+  return sharp(background).composite([{ input: foreground, gravity: 'centre' }]).jpeg({ quality: 90 }).toBuffer();
+}
+
+// setGroupPhoto: depois de mandar o cartao, usa ele como foto do grupo (so o
+// aviso automatico das 9h faz isso; o !testaraniversario nao mexe na foto).
+async function sendBirthdayToGroup(sock, groupJid, rawPeople, { setGroupPhoto = false } = {}) {
   // "name" continua sendo o da lista (pra achar foto/ligacao); "display" e o nome padronizado que sai no texto.
   const members = getBirthdayMembers();
   const people = rawPeople.map((p) => ({ ...p, display: birthdayDisplayName(p, members) }));
@@ -1064,6 +1076,15 @@ async function sendBirthdayToGroup(sock, groupJid, rawPeople) {
   }
   const sent = await sock.sendMessage(groupJid, image ? { image, caption } : { text: caption });
   if (sent?.key?.id) sentByBot.add(sent.key.id);
+
+  if (setGroupPhoto && image) {
+    try {
+      await sock.updateProfilePicture(groupJid, await birthdayCardToGroupPhoto(image));
+      console.log(`🖼️  Foto do grupo ${groupJid} trocada pelo cartao de aniversario`);
+    } catch (err) {
+      console.error('Erro ao usar o cartao de aniversario como foto do grupo (o bot precisa ser admin):', err);
+    }
+  }
 }
 
 async function checkAndSendBirthdays(sock) {
@@ -1092,7 +1113,7 @@ async function checkAndSendBirthdays(sock) {
 
   for (const [groupJid, people] of peopleByGroup) {
     try {
-      await sendBirthdayToGroup(sock, groupJid, people);
+      await sendBirthdayToGroup(sock, groupJid, people, { setGroupPhoto: true });
     } catch (err) {
       console.error(`Erro ao enviar aviso de aniversario (${people.map((p) => p.name).join(', ')}) para ${groupJid}:`, err);
     }
