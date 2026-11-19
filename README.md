@@ -168,7 +168,7 @@ Tudo em `src/` (JavaScript, módulos ES):
 | `metrics.js` | Métricas do painel: conexão, comandos mais usados, última execução de cada cron, CPU/memória/disco da VM |
 | `events.js` | Eventos e presença (`events.json`) |
 | `birthdays.js` | Aniversariantes e controle de renomear o grupo |
-| `birthdayCard.js` | Desenha o **cartão de aniversário** (estilo "festa escura", foto + confete) em SVG → PNG |
+| `birthdayCard.js` | Desenha o **cartão de aniversário** (estilo "festa escura", foto + confete) em SVG → PNG. No aviso automático das 9h, o mesmo cartão também vira a **foto do grupo** (cartão inteiro sobre uma versão borrada dele; o `!testaraniversario` não mexe na foto) |
 | `birthdayPhotos.js` | Fotos enviadas na mão pelo painel (admin): por **membro** (tocar na foto na aba Membros) e as antigas por nome de aniversariante (só leitura) — ficam só na VM |
 | `extraMembers.js` | Pessoas **adicionadas na mão** à lista de membros (quem faz aniversário mas não está no grupo, ex.: Vini) + a lista completa de membros usada pelo painel e pelos aniversários |
 | `birthdayLinks.js` | De/para aniversariante → membro do grupo (foto do cartão e da lista): ligação manual do painel, ou automática por nome/apelido (`apelidos.txt`) quando só uma pessoa bate; sugere candidatos nos demais |
