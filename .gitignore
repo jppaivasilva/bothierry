@@ -29,3 +29,5 @@ member_photos/
 extra_members.json
 audio_usage.json
 estreia_state.json
+group_photo_backup.json
+group_photo_backups/
