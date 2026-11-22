@@ -43,6 +43,7 @@ import { shouldSendMorning, isWeekend, morningGreeting, morningTheme } from './m
 import { renderBirthdayCard, photoToDataUri } from './birthdayCard.js';
 import { renderWeeklyCard } from './weeklyCard.js';
 import { renderPremiereCard } from './premiereCard.js';
+import { loadBackups, saveBackup, setBackupUrlKey, readBackupBuffer, removeBackup } from './groupPhotoBackup.js';
 import { renderWordCloudCard } from './wordcloudCard.js';
 import { buildWordCloud } from './wordcloud.js';
 import { recordAudioUse, getTopAudioSince } from './audioUsage.js';
@@ -908,6 +909,53 @@ const commands = {
 // Reverte pro nome original os grupos que foram renomeados pra "Parabens" de
 // um aniversario anterior (chamado sempre antes de processar o nome de hoje,
 // pra nao acumular renomeacoes de dias passados).
+// Identificador da foto de perfil de um grupo: o caminho da URL dela (sem os
+// parametros de assinatura, que mudam a cada consulta). null se nao tem foto.
+async function groupPhotoKey(sock, groupJid) {
+  try {
+    const url = await sock.profilePictureUrl(groupJid, 'image');
+    return url ? new URL(url).pathname : null;
+  } catch {
+    return null;
+  }
+}
+
+async function downloadGroupPhoto(sock, groupJid) {
+  try {
+    const url = await sock.profilePictureUrl(groupJid, 'image');
+    if (!url) return null;
+    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    return res.ok ? Buffer.from(await res.arrayBuffer()) : null;
+  } catch {
+    return null;
+  }
+}
+
+// Devolve a foto do grupo de antes do cartao de aniversario, quando o dia do
+// aniversario passa (chamada junto com a reversao do nome, a meia-noite). Se
+// alguem trocou a foto nesse meio tempo (!fotogrupo, troca automatica...), nao
+// mexe: so descarta o backup. Grupo que nao tinha foto volta a ficar sem foto.
+async function revertPendingGroupPhotos(sock) {
+  const today = getBrasiliaNow().date;
+  for (const [groupJid, entry] of Object.entries(loadBackups())) {
+    if (entry.date >= today) continue; // o cartao ainda e de hoje
+    try {
+      const currentKey = await groupPhotoKey(sock, groupJid);
+      if (entry.urlKey && currentKey && entry.urlKey !== currentKey) {
+        console.log(`[foto do grupo] ${groupJid}: a foto foi trocada por outra pessoa, mantendo a atual`);
+      } else {
+        const original = readBackupBuffer(groupJid);
+        if (original) await sock.updateProfilePicture(groupJid, original);
+        else await sock.removeProfilePicture(groupJid);
+        console.log(`🖼️  Foto do grupo ${groupJid} devolvida depois do aniversario`);
+      }
+      removeBackup(groupJid);
+    } catch (err) {
+      console.error(`Erro ao devolver a foto do grupo ${groupJid} (vai tentar de novo):`, err);
+    }
+  }
+}
+
 async function revertPendingGroupRenames(sock) {
   const pending = getPendingGroupRenames();
   const groupJids = Object.keys(pending);
@@ -948,6 +996,7 @@ async function syncGroupNameForBirthdays(sock) {
   if (getLastGroupNameSyncDate() === todayKey) return;
 
   await revertPendingGroupRenames(sock);
+  await revertPendingGroupPhotos(sock);
 
   const todaysBirthdays = getBirthdaysToday();
   let allGroupJids = null; // cache: so busca se precisar (aniversariante sem groupJid definido)
@@ -1079,7 +1128,11 @@ async function sendBirthdayToGroup(sock, groupJid, rawPeople, { setGroupPhoto = 
 
   if (setGroupPhoto && image) {
     try {
+      const today = getBrasiliaNow().date;
+      // Guarda a foto original so na primeira vez (aniversarios em dias seguidos nao sobrescrevem o backup com um cartao).
+      if (!loadBackups()[groupJid]) saveBackup(groupJid, await downloadGroupPhoto(sock, groupJid), today);
       await sock.updateProfilePicture(groupJid, await birthdayCardToGroupPhoto(image));
+      setBackupUrlKey(groupJid, await groupPhotoKey(sock, groupJid), today);
       console.log(`🖼️  Foto do grupo ${groupJid} trocada pelo cartao de aniversario`);
     } catch (err) {
       console.error('Erro ao usar o cartao de aniversario como foto do grupo (o bot precisa ser admin):', err);
