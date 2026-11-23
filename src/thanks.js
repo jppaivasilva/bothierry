@@ -1,5 +1,5 @@
 // "Obrigado @Nicholas" em sequencia: quando 3 mensagens seguidas agradecem ao
-// Nicholas, o bot manda uma enxurrada de obrigados marcando ele.
+// Nicholas, o bot manda uma enxurrada de obrigados (uma mensagem a cada 2 s) marcando ele.
 
 export const THANKS_TARGET_NAME = 'Nicholas';
 const THANKS_WORD = /(?<![\p{L}])obrigad(?:o|a|ão|inho|inha)s?(?![\p{L}])/iu;
@@ -19,10 +19,17 @@ export function isThanksToTarget({ text, mentionedJids = [], targetJids = [], ta
   return mentioned || named;
 }
 
-/** Texto da enxurrada: de 8 a 12 linhas "Obrigado @alvo". */
-export function buildThanksText(targetJid, count = 8 + Math.floor(Math.random() * 5)) {
-  const line = `Obrigado @${digits(targetJid)} 🙏`;
-  return Array.from({ length: count }, () => line).join('\n');
+/** Intervalo entre os obrigados da enxurrada (ms). */
+export const THANKS_INTERVAL_MS = 2000;
+
+/** Quantos obrigados mandar nessa enxurrada: de 8 a 12. */
+export function pickThanksCount() {
+  return 8 + Math.floor(Math.random() * 5);
+}
+
+/** Texto de cada obrigado da enxurrada. */
+export function buildThanksText(targetJid) {
+  return `Obrigado @${digits(targetJid)} 🙏`;
 }
 
 /**

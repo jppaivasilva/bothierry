@@ -44,7 +44,7 @@ import { renderBirthdayCard, photoToDataUri } from './birthdayCard.js';
 import { renderWeeklyCard } from './weeklyCard.js';
 import { renderPremiereCard } from './premiereCard.js';
 import { setPairingQr, clearPairingQr, getPairingQr } from './pairingQr.js';
-import { THANKS_TARGET_NAME, isThanksToTarget, buildThanksText, ThanksStreak } from './thanks.js';
+import { THANKS_TARGET_NAME, THANKS_INTERVAL_MS, isThanksToTarget, buildThanksText, pickThanksCount, ThanksStreak } from './thanks.js';
 import { loadBackups, saveBackup, setBackupUrlKey, readBackupBuffer, removeBackup } from './groupPhotoBackup.js';
 import { renderWordCloudCard } from './wordcloudCard.js';
 import { buildWordCloud } from './wordcloud.js';
@@ -1384,6 +1384,16 @@ async function commandTestarEstreia({ sock, groupJid }) {
   await sendPremiereCard(sock, { onlyGroupJid: groupJid, mentionAll: false });
 }
 
+// Enxurrada de obrigados: de 8 a 12 mensagens, uma a cada 2 s, marcando o alvo.
+async function sendThanksFlood(sock, groupJid, targetJid) {
+  const count = pickThanksCount();
+  for (let i = 0; i < count; i++) {
+    const sent = await sock.sendMessage(groupJid, { text: buildThanksText(targetJid), mentions: [targetJid] });
+    if (sent?.key?.id) sentByBot.add(sent.key.id);
+    if (i < count - 1) await new Promise((resolve) => setTimeout(resolve, THANKS_INTERVAL_MS));
+  }
+}
+
 // Mensagem automatica das 18h: soma o tempo "perdido" e o ranking completo do
 // expediente (ultimas 10h corridas — 8h as 18h), pra cada grupo que o bot participa.
 async function sendEndOfDayMessage(sock) {
@@ -2506,8 +2516,8 @@ async function startBot() {
         const mentionedJids = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
         const isThanks = isThanksToTarget({ text, mentionedJids, targetJids: [targetJid] });
         if (thanksStreak.register(groupJid, isThanks) && targetJid) {
-          const sent = await sock.sendMessage(groupJid, { text: buildThanksText(targetJid), mentions: [targetJid] });
-          if (sent?.key?.id) sentByBot.add(sent.key.id);
+          // Em segundo plano: sao ~10 mensagens com 2 s entre elas, sem travar o resto do bot.
+          sendThanksFlood(sock, groupJid, targetJid).catch((err) => console.error('Erro na enxurrada de obrigados:', err));
         }
       } catch (err) {
         console.error('Erro na enxurrada de obrigados:', err);
