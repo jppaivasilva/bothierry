@@ -1,0 +1,257 @@
+[
+ {
+  "pr": 1,
+  "titulo": "Comando !salvaraudio",
+  "resumo": "Responda a um áudio com !salvaraudio, escolha um nome e ele vira um comando (!nome) que qualquer um do grupo pode usar."
+ },
+ {
+  "pr": 2,
+  "titulo": "Aba Comandos no painel",
+  "resumo": "Nova aba que ensina todos os comandos do bot, com busca, lista de aniversariantes e áudios salvos."
+ },
+ {
+  "pr": 3,
+  "titulo": "Deploy automático",
+  "resumo": "A VM confere o GitHub a cada 3 minutos, atualiza o bot sozinha e volta atrás se algo quebrar."
+ },
+ {
+  "pr": 4,
+  "titulo": "Ações do painel: áudios, reinício e logs",
+  "resumo": "Apagar áudio, reiniciar o bot e ver os logs direto pelo painel."
+ },
+ {
+  "pr": 5,
+  "titulo": "Usuário administrador (root)",
+  "resumo": "Login separado para as ações sensíveis; só o root vê os botões de administração."
+ },
+ {
+  "pr": 6,
+  "titulo": "!painel e presença em eventos",
+  "resumo": "O !painel manda um link de uso único no privado; aba Eventos com os botões Vou / Não vou."
+ },
+ {
+  "pr": 7,
+  "titulo": "Eventos: um nome por linha",
+  "resumo": "Confirmados e ausentes aparecem um embaixo do outro."
+ },
+ {
+  "pr": 8,
+  "titulo": "Propaganda #ad às 22:30",
+  "resumo": "Banner da UniTV com legenda todos os dias às 22:30 (removida no PR #40)."
+ },
+ {
+  "pr": 9,
+  "titulo": "Grupo principal sem depender do nome",
+  "resumo": "O bot acha o grupo principal pelo movimento, mesmo quando o nome do grupo muda."
+ },
+ {
+  "pr": 10,
+  "titulo": "README completo",
+  "resumo": "Arquitetura, fluxogramas e hospedagem documentados."
+ },
+ {
+  "pr": 11,
+  "titulo": "Membro maior e mapa de calor",
+  "resumo": "Detalhes do membro em janela maior e mapa de calor com números."
+ },
+ {
+  "pr": 12,
+  "titulo": "Bom dia com cartão de previsão",
+  "resumo": "Previsão do tempo em imagem no bom dia, com texto de reserva se a imagem falhar."
+ },
+ {
+  "pr": 13,
+  "titulo": "Comandos em colunas",
+  "resumo": "Ranking agrupado com Regras e menu de comandos em colunas."
+ },
+ {
+  "pr": 14,
+  "titulo": "Aniversariantes no painel",
+  "resumo": "Lista com aniversários passados, o próximo em destaque e quantos dias faltam."
+ },
+ {
+  "pr": 15,
+  "titulo": "Cartão de aniversário com foto",
+  "resumo": "Cartão de aniversário em imagem com a foto do membro; ligação aniversariante → membro feita no painel."
+ },
+ {
+  "pr": 16,
+  "titulo": "Foto na lista de aniversariantes",
+  "resumo": "A foto do membro ligado aparece ao lado do nome."
+ },
+ {
+  "pr": 17,
+  "titulo": "Ligação automática de nomes",
+  "resumo": "Nome ou apelido vira membro de forma mais esperta, com sugestões para ligar com um toque."
+ },
+ {
+  "pr": 18,
+  "titulo": "Foto de aniversariante de fora",
+  "resumo": "O admin envia a foto de quem não é membro do grupo."
+ },
+ {
+  "pr": 19,
+  "titulo": "Nomes padronizados",
+  "resumo": "O mesmo nome de exibição em todo lugar: painel, rankings, eventos e aniversários."
+ },
+ {
+  "pr": 20,
+  "titulo": "Foto enviada vale na aba Membros",
+  "resumo": "A foto enviada pelo admin também aparece no painel de membros."
+ },
+ {
+  "pr": 21,
+  "titulo": "Foto do membro tocando nela",
+  "resumo": "Enviar, trocar ou remover a foto tocando nela na aba Membros."
+ },
+ {
+  "pr": 22,
+  "titulo": "Fim do envio de foto na aba Sistema",
+  "resumo": "As funções de foto saíram do Sistema e ficam só em Membros."
+ },
+ {
+  "pr": 23,
+  "titulo": "Pessoas adicionadas à mão",
+  "resumo": "A lista de membros aceita pessoas de fora do grupo (Vini, Felipe Lopes…)."
+ },
+ {
+  "pr": 24,
+  "titulo": "Bothierry fora dos membros",
+  "resumo": "O próprio bot deixa de aparecer e de contar como membro."
+ },
+ {
+  "pr": 25,
+  "titulo": "Criar e excluir eventos pelo portal",
+  "resumo": "O admin cria e exclui eventos direto no painel."
+ },
+ {
+  "pr": 26,
+  "titulo": "Eventos abertos a todos",
+  "resumo": "Qualquer pessoa com acesso cria e exclui eventos, e o bot avisa no grupo quando um evento é criado."
+ },
+ {
+  "pr": 27,
+  "titulo": "Comandos removidos",
+  "resumo": "Saíram !news, !meme, !schedule e !fotobot."
+ },
+ {
+  "pr": 28,
+  "titulo": "Áudios à esquerda em Comandos",
+  "resumo": "Card de áudios fixo na coluna da esquerda, ao lado do Outros."
+ },
+ {
+  "pr": 29,
+  "titulo": "Previsão de Tietê",
+  "resumo": "Tietê entra no bom dia de 30/10 a 02/11."
+ },
+ {
+  "pr": 30,
+  "titulo": "Bom dia no fim de semana",
+  "resumo": "Bom dia também no sábado 31/10 e no domingo 01/11."
+ },
+ {
+  "pr": 31,
+  "titulo": "Correção do \"sem thumb\"",
+  "resumo": "Link com prévia entregue como arquivo não gera mais o aviso falso \"sem thumb\"."
+ },
+ {
+  "pr": 32,
+  "titulo": "Teste de story de grupo",
+  "resumo": "Comando experimental para postar a previsão como story do grupo (descontinuado)."
+ },
+ {
+  "pr": 33,
+  "titulo": "Teste de story: 3 variantes",
+  "resumo": "Três formatos de mensagem de story testados (o WhatsApp ignorou todos)."
+ },
+ {
+  "pr": 34,
+  "titulo": "Teste de story removido",
+  "resumo": "O comando experimental saiu: o WhatsApp não aceita story de grupo vindo do bot."
+ },
+ {
+  "pr": 35,
+  "titulo": "Resumo semanal",
+  "resumo": "Card grande no domingo às 21h: campeão, top 5, total vs. semana anterior, horário de pico, links e áudio da semana. Comando !resumosemanal para testar."
+ },
+ {
+  "pr": 36,
+  "titulo": "Nova tentativa ao listar grupos",
+  "resumo": "Quando o WhatsApp responde rate-overlimit, o bot tenta de novo (e guarda a lista por 2 min), evitando perder mensagens automáticas."
+ },
+ {
+  "pr": 37,
+  "titulo": "Aba Nuvem de palavras",
+  "resumo": "Nuvem com as palavras mais faladas do dia, com seletor de data."
+ },
+ {
+  "pr": 38,
+  "titulo": "Card da nuvem às 18h",
+  "resumo": "Logo depois da mensagem das 18h, o bot manda o card da nuvem de palavras do dia."
+ },
+ {
+  "pr": 39,
+  "titulo": "!otario no bot",
+  "resumo": "Quem tenta chamar o bot de otário recebe \"bela tentativa amigo\"."
+ },
+ {
+  "pr": 40,
+  "titulo": "Propaganda das 22:30 removida",
+  "resumo": "Saiu o envio diário, o comando de teste e o banner."
+ },
+ {
+  "pr": 41,
+  "titulo": "Foto do bot: edição GTA VI",
+  "resumo": "Tema da foto do bot de 18 a 20/11, vindo junto com o repositório."
+ },
+ {
+  "pr": 42,
+  "titulo": "Modelo de imagem atualizado",
+  "resumo": "gpt-image-1 deixou de existir na conta; passa a usar gpt-image-1.5 (configurável por OPENAI_IMAGE_MODEL)."
+ },
+ {
+  "pr": 43,
+  "titulo": "Bom dia em Vice City",
+  "resumo": "No dia 19/11 o cartão do bom dia e o texto saem no tema do GTA VI. !testarbomdia gtavi mostra a versão."
+ },
+ {
+  "pr": 44,
+  "titulo": "Cidade fake: Vice City",
+  "resumo": "Vice City entra na previsão com sol e 36°."
+ },
+ {
+  "pr": 45,
+  "titulo": "Card da estreia do GTA VI",
+  "resumo": "À meia-noite de 19/11 o bot manda o card da estreia marcando todo o grupo. !testarestreia para ver."
+ },
+ {
+  "pr": 46,
+  "titulo": "Card de aniversário vira foto do grupo",
+  "resumo": "O card das 9h também passa a ser a foto do grupo."
+ },
+ {
+  "pr": 47,
+  "titulo": "Foto do grupo volta depois",
+  "resumo": "A foto de antes volta à meia-noite seguinte (a menos que alguém tenha trocado)."
+ },
+ {
+  "pr": 48,
+  "titulo": "QR do WhatsApp no painel",
+  "resumo": "Se o WhatsApp deslogar o bot, ele gera um QR novo sozinho e o root o vê na aba Sistema."
+ },
+ {
+  "pr": 49,
+  "titulo": "Enxurrada de obrigados",
+  "resumo": "Três \"Obrigado @Nicholas\" seguidos fazem o bot responder com vários obrigados marcando ele."
+ },
+ {
+  "pr": 50,
+  "titulo": "Obrigados a cada 2 segundos",
+  "resumo": "A enxurrada passa a ser de 8 a 12 mensagens separadas, uma a cada 2 s."
+ },
+ {
+  "pr": 51,
+  "titulo": "Aba Versões (só root)",
+  "resumo": "Histórico dos PRs mergeados com o que foi implementado e qual versão está no ar."
+ }
+]

@@ -13,6 +13,7 @@ import { BOT_PHOTO_PATH } from './groupPhoto.js';
 import { formatDisplayName } from './displayNames.js';
 import { buildWordCloud } from './wordcloud.js';
 import { qrToSvg } from './pairingQr.js';
+import { getVersionHistory } from './versions.js';
 import { getAvatarPath } from './avatars.js';
 import { loadEvents, addEvent, deleteEvent, eventTitleExists, addAttendee, addAbsentee } from './events.js';
 
@@ -521,6 +522,13 @@ const DASHBOARD_HTML = `<!doctype html>
   .tag-auto { background: rgba(52,199,89,.16); color: #1f8f3d; }
   .tag-none { background: rgba(255,59,48,.12); color: #d70015; }
   .menu-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .ver-item { display: flex; gap: 14px; align-items: flex-start; padding: 14px 16px; margin-bottom: 10px; border-radius: 16px; background: var(--glass-bg); border: 1px solid var(--glass-border); }
+  .ver-num { flex: none; min-width: 52px; text-align: center; font-size: 13px; font-weight: 800; color: var(--accent-blue); background: rgba(0,122,255,.1); border-radius: 999px; padding: 4px 10px; }
+  .ver-title { font-size: 15px; font-weight: 700; color: var(--text-primary); }
+  .ver-desc { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+  .ver-meta { font-size: 12px; color: var(--text-secondary); margin-top: 6px; }
+  .ver-meta a { color: var(--accent-blue); text-decoration: none; font-weight: 600; }
+  .ver-live { display: inline-block; margin-left: 8px; font-size: 11px; font-weight: 800; color: #fff; background: var(--accent-green); border-radius: 999px; padding: 2px 8px; vertical-align: middle; }
   .wc-box { position: relative; width: 100%; height: 480px; overflow: hidden; }
   .wc-word { position: absolute; line-height: 1; white-space: nowrap; font-weight: 800; letter-spacing: -.02em; cursor: default; transition: transform .15s var(--ease-out); }
   .wc-word:hover { transform: scale(1.08); }
@@ -617,6 +625,7 @@ const DASHBOARD_HTML = `<!doctype html>
       <button class="tab-btn" data-tab="events">Eventos</button>
       <button class="tab-btn" data-tab="system">Sistema</button>
       <button class="tab-btn" data-tab="server">Servidor</button>
+      <button class="tab-btn admin-only" data-tab="versions">Versões</button>
     </div>
 
     <div class="header-status">
@@ -819,6 +828,11 @@ const DASHBOARD_HTML = `<!doctype html>
   </div>
   </div>
 
+  <div id="tab-versions" class="tab-panel">
+  <div class="sub">Histórico do que foi implementado, um item por PR mergeado · só o root vê esta aba</div>
+  <div id="versionsList"></div>
+  </div>
+
   <div id="tab-server" class="tab-panel">
   <div class="sub">Uso de recursos da máquina (VM) onde o bot roda · atualiza a cada 5s</div>
 
@@ -864,6 +878,7 @@ document.querySelectorAll('.tabs:not(#rankingToggle) > .tab-btn').forEach((btn) 
     if (btn.dataset.tab === 'activity' && trendChart) trendChart.resize();
     if (btn.dataset.tab === 'server' && systemHistoryChart) systemHistoryChart.resize();
     if (btn.dataset.tab === 'cloud') loadCloud();
+    if (btn.dataset.tab === 'versions') loadVersions();
     if (btn.dataset.tab === 'members') loadMembers();
     if (btn.dataset.tab === 'menu') loadMenu();
     if (btn.dataset.tab === 'events') loadEvents();
@@ -1610,6 +1625,26 @@ async function checkPairingQr() {
   }
 }
 setInterval(checkPairingQr, 4000);
+
+// ---------- Versoes (admin) ----------
+async function loadVersions() {
+  const box = document.getElementById('versionsList');
+  try {
+    const data = await fetch('/api/admin/versions').then((r) => r.json());
+    if (!data.items) { box.textContent = 'Não consegui carregar o histórico.'; return; }
+    box.innerHTML = data.items.map((v) => {
+      const when = v.date ? new Date(v.date).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+      const meta = [when, v.hash].filter(Boolean).map(escapeHtml).join(' · ');
+      const link = v.link ? ' · <a href="' + escapeHtml(v.link) + '" target="_blank" rel="noopener">ver no GitHub</a>' : '';
+      return '<div class="ver-item"><div class="ver-num">#' + v.pr + '</div><div>' +
+        '<div class="ver-title">' + escapeHtml(v.titulo) + (v.live ? '<span class="ver-live">NO AR</span>' : '') + '</div>' +
+        (v.resumo ? '<div class="ver-desc">' + escapeHtml(v.resumo) + '</div>' : '') +
+        '<div class="ver-meta">' + meta + link + '</div></div></div>';
+    }).join('');
+  } catch (err) {
+    box.textContent = 'Não consegui carregar o histórico.';
+  }
+}
 
 let menuData = null;
 
@@ -2479,6 +2514,9 @@ export function startDashboardServer(
       const groupJid = getMainGroupJid();
       const cloud = groupJid ? buildWordCloud(getTextsForDate(groupJid, date)) : { totalMessages: 0, distinctWords: 0, words: [] };
       sendJson(res, 200, { date, ...cloud });
+    } else if (req.url === '/api/admin/versions' && req.method === 'GET') {
+      if (!isAdmin(req)) return sendJson(res, 403, { error: 'só o administrador pode ver isso' });
+      sendJson(res, 200, getVersionHistory());
     } else if (req.url === '/api/admin/qr' && req.method === 'GET') {
       // QR de pareamento do WhatsApp: so existe enquanto o bot esta deslogado esperando leitura.
       if (!isAdmin(req)) return sendJson(res, 403, { error: 'só o administrador pode ver isso' });
