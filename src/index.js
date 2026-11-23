@@ -43,6 +43,7 @@ import { shouldSendMorning, isWeekend, morningGreeting, morningTheme } from './m
 import { renderBirthdayCard, photoToDataUri } from './birthdayCard.js';
 import { renderWeeklyCard } from './weeklyCard.js';
 import { renderPremiereCard } from './premiereCard.js';
+import { setPairingQr, clearPairingQr, getPairingQr } from './pairingQr.js';
 import { loadBackups, saveBackup, setBackupUrlKey, readBackupBuffer, removeBackup } from './groupPhotoBackup.js';
 import { renderWordCloudCard } from './wordcloudCard.js';
 import { buildWordCloud } from './wordcloud.js';
@@ -2268,6 +2269,19 @@ const RECONNECT_INITIAL_DELAY_MS = 2000;
 const RECONNECT_MAX_DELAY_MS = 60000;
 let reconnectDelayMs = RECONNECT_INITIAL_DELAY_MS;
 
+// Move auth_info pra auth_info.deslogada-<data> (mantem so as 2 ultimas) pra
+// o proximo startBot() comecar do zero e gerar um QR novo. Pra voltar atras:
+// pare o bot, apague auth_info e renomeie a pasta guardada de volta.
+function archiveLoggedOutSession() {
+  try {
+    if (fs.existsSync('auth_info')) fs.renameSync('auth_info', `auth_info.deslogada-${new Date().toISOString().replace(/[:.]/g, '-')}`);
+    const old = fs.readdirSync('.').filter((f) => f.startsWith('auth_info.deslogada-')).sort();
+    for (const f of old.slice(0, -2)) fs.rmSync(f, { recursive: true, force: true });
+  } catch (err) {
+    console.error('Erro ao guardar a sessao deslogada:', err);
+  }
+}
+
 async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState('auth_info');
 
@@ -2293,6 +2307,7 @@ async function startBot() {
     if (qr) {
       console.log('\nEscaneie o QR code abaixo no WhatsApp (Aparelhos conectados > Conectar aparelho):\n');
       qrcode.generate(qr, { small: true });
+      setPairingQr(qr); // o painel (admin) mostra esse mesmo QR
     }
 
     if (connection === 'close') {
@@ -2305,11 +2320,17 @@ async function startBot() {
         reconnectDelayMs = Math.min(reconnectDelayMs * 2, RECONNECT_MAX_DELAY_MS);
         setTimeout(startBot, delay);
       } else {
-        console.log('Conexao fechada. Sessao deslogada — apague a pasta auth_info e escaneie o QR novamente.');
+        // O WhatsApp deslogou o aparelho do bot: a sessao nao serve mais. Guarda a
+        // pasta antiga (nao apaga) e abre uma conexao nova, que gera o QR — ele
+        // aparece no painel (aba Sistema, so admin) e no log, e e so ler no celular.
+        console.log('Conexao fechada. Sessao deslogada — guardando a sessao antiga e gerando um QR novo (painel > Sistema, ou aqui no log).');
         recordConnectionEvent('disconnected', { statusCode, willReconnect: false });
+        archiveLoggedOutSession();
+        setTimeout(startBot, 2000);
       }
     } else if (connection === 'open') {
       reconnectDelayMs = RECONNECT_INITIAL_DELAY_MS;
+      clearPairingQr();
       console.log('✅ Conectado ao WhatsApp! Ouvindo mensagens dos grupos...');
       recordConnectionEvent('connected');
       currentSock = sock;
@@ -2554,6 +2575,7 @@ async function startBot() {
 }
 
 startDashboardServer(DASHBOARD_PORT, {
+  getPairingQr,
   deleteAudio: deleteAudioByName,
   announceEvent: announceNewEvent,
   getCommandsMenu: () => ({

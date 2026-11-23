@@ -182,6 +182,7 @@ Tudo em `src/` (JavaScript, módulos ES):
 | `morning.js` | Regras do bom dia: em quais dias sai (seg–sex + datas extras de fim de semana) o texto de abertura e o **tema do cartão** por data (`morningTheme`: Vice City no dia do GTA VI, 19/11/2026) |
 | `weather.js` | Previsão do tempo (Open-Meteo): dados por cidade e texto de reserva. Além das cidades fixas, aceita **cidades temporárias** com data de início e fim (`TEMPORARY_CITIES`; ex.: Tietê de 30/10 a 02/11) que saem sozinhas Tem também cidades de **brincadeira** com previsão fixa (`FAKE_CITIES`, hoje a *Vice City*: sol, 36°). |
 | `wordcloudCard.js` | Desenha o **cartão da nuvem de palavras** (mesmo layout em espiral do painel, feito no servidor com o resvg) |
+| `pairingQr.js` | Guarda o QR de pareamento do WhatsApp e o desenha em SVG pro painel (só admin) quando o bot está deslogado |
 | `wordcloud.js` | Conta as palavras do dia pra **nuvem de palavras** do painel (ignora links, menções, comandos, risadas e palavras comuns) |
 | `premiereCard.js` | Desenha o **cartão da estreia do GTA VI** (Vice City, "VI" neon, grade) |
 | `weeklyCard.js` | Desenha o **cartão do resumo semanal** (SVG → PNG), no estilo escuro do cartão de aniversário |
@@ -205,7 +206,7 @@ Tudo em arquivos na pasta do projeto, **na VM** (a maioria está no `.gitignore`
 
 | Arquivo / pasta | O que guarda | Versionado? |
 | --- | --- | --- |
-| `auth_info/` | **sessão do WhatsApp** (quem tem isso controla o número do bot) | não |
+| `auth_info/`, `auth_info.deslogada-*/` | **sessão do WhatsApp** (quem tem isso controla o número do bot) | não |
 | `.env` | chaves e senhas (veja [seção 8](#8-configuração-env)) | não |
 | `messages.jsonl` | mensagens dos últimos **14 dias** ("janela quente", uma linha JSON por mensagem, texto incluso) | não |
 | `archive/messages-AAAA-MM.jsonl` | mensagens mais antigas, um arquivo por mês (arquiva ao iniciar e todo dia às 03h) | não |
@@ -399,7 +400,7 @@ ssh -i <chave> ubuntu@<ip-da-vm> "cd ~/bothierry && node --check src/index.js &&
 ### Problemas comuns
 
 - **Conexão caindo toda hora (loop de "Conexão fechada", código 440):** quase sempre são **duas instâncias do bot** usando a mesma sessão do WhatsApp (ex.: um processo esquecido no PC). Confirme com `pm2 list` e feche as outras.
-- **Sessão deslogada:** apague a pasta `auth_info/`, rode o bot uma vez à mão (`node src/index.js`) e escaneie o QR em *WhatsApp → Aparelhos conectados*.
+- **Sessão deslogada:** o bot guarda a sessão antiga (`auth_info.deslogada-<data>/`, só as 2 últimas) e gera um QR novo sozinho. Entre no painel como **admin → Sistema**: o QR aparece no topo (troca a cada ~20 s); leia em *WhatsApp (celular do bot) → Aparelhos conectados → Conectar um aparelho*. O mesmo QR sai no log (`pm2 logs`). Pra desfazer: pare o bot, apague `auth_info/` e renomeie a pasta guardada de volta.
 - **Memória "RSS" alta no painel:** é normal logo após reconexões (buffers nativos do Baileys). Preocupa só se continuar subindo sem parar — o PM2 reinicia sozinho acima de 750 MB.
 - **Link do `!painel` não chega no privado:** o bot avisa no grupo; peça pra pessoa mandar um "oi" pro bot no privado e tentar de novo.
 

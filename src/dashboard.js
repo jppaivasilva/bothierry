@@ -12,6 +12,7 @@ import { birthdayPhotoPath, birthdayPhotoVersion, deleteBirthdayPhoto, memberPho
 import { BOT_PHOTO_PATH } from './groupPhoto.js';
 import { formatDisplayName } from './displayNames.js';
 import { buildWordCloud } from './wordcloud.js';
+import { qrToSvg } from './pairingQr.js';
 import { getAvatarPath } from './avatars.js';
 import { loadEvents, addEvent, deleteEvent, eventTitleExists, addAttendee, addAbsentee } from './events.js';
 
@@ -739,6 +740,12 @@ const DASHBOARD_HTML = `<!doctype html>
 
   <div id="tab-system" class="tab-panel">
   <div class="sub">Saúde técnica do bot — use pra investigar quando algo der errado · atualiza a cada 5s</div>
+
+  <div id="qrCard" class="chart-box" style="display:none; margin-bottom:20px;">
+    <div class="title">WhatsApp desconectado: leia o QR</div>
+    <span class="label subtitle">No celular do bot: WhatsApp → Configurações → Aparelhos conectados → Conectar um aparelho. O QR troca a cada ~20 segundos.</span>
+    <div id="qrBox" style="margin-top:16px; max-width:340px;"></div>
+  </div>
 
   <div class="cards">
     <div class="card"><div class="label"><span class="dot" style="--dot-color:var(--accent-green)"></span>Status agora</div><div class="value" id="status">—</div></div>
@@ -1590,6 +1597,20 @@ window.addEventListener('resize', () => {
   if (document.getElementById('tab-cloud').classList.contains('active')) layoutCloud();
 });
 
+// QR de pareamento (admin): aparece na aba Sistema enquanto o bot esta deslogado esperando leitura.
+async function checkPairingQr() {
+  if (!isAdminUser) return;
+  try {
+    const data = await fetch('/api/admin/qr').then((r) => r.json());
+    const card = document.getElementById('qrCard');
+    card.style.display = data.waiting ? 'block' : 'none';
+    if (data.waiting) document.getElementById('qrBox').innerHTML = data.svg;
+  } catch (err) {
+    // sem resposta agora: tenta de novo no proximo ciclo
+  }
+}
+setInterval(checkPairingQr, 4000);
+
 let menuData = null;
 
 async function loadMenu() {
@@ -2314,6 +2335,7 @@ export function startDashboardServer(
     getCommandsMenu = () => ({ categories: [], audios: [], birthdays: [] }),
     deleteAudio = () => ({ ok: false, error: 'indisponível' }),
     announceEvent = async () => {},
+    getPairingQr = () => null,
   } = {},
 ) {
   const server = http.createServer((req, res) => {
@@ -2457,6 +2479,11 @@ export function startDashboardServer(
       const groupJid = getMainGroupJid();
       const cloud = groupJid ? buildWordCloud(getTextsForDate(groupJid, date)) : { totalMessages: 0, distinctWords: 0, words: [] };
       sendJson(res, 200, { date, ...cloud });
+    } else if (req.url === '/api/admin/qr' && req.method === 'GET') {
+      // QR de pareamento do WhatsApp: so existe enquanto o bot esta deslogado esperando leitura.
+      if (!isAdmin(req)) return sendJson(res, 403, { error: 'só o administrador pode ver isso' });
+      const current = getPairingQr();
+      sendJson(res, 200, current ? { waiting: true, svg: qrToSvg(current.qr), ageSec: Math.round((Date.now() - current.at) / 1000) } : { waiting: false });
     } else if (req.url === '/api/me') {
       const session = getSession(req);
       sendJson(res, 200, { role: session?.role || 'viewer', name: session?.role === 'member' ? session.name : null });

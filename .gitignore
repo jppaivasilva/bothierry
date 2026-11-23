@@ -1,5 +1,6 @@
 node_modules/
 auth_info/
+auth_info.deslogada-*/
 messages.jsonl
 archive/
 metrics.jsonl
