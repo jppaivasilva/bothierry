@@ -17,7 +17,7 @@ async function getSharp() {
   if (!sharpModule) sharpModule = (await import('sharp')).default;
   return sharpModule;
 }
-import { logMessage, getDailyCounts, getCountsSince, getCountsBetween, getMessagesSince, extractUrls, wasUrlSentSince, loadSeenMessageIds, archiveOldMessages, getRecentSenderJids, getMainGroupJid, getWindowSummary, getTextsForDate } from './db.js';
+import { logMessage, getDailyCounts, getCountsSince, getCountsBetween, getMessagesSince, extractUrls, wasUrlSentSince, loadSeenMessageIds, archiveOldMessages, getRecentSenderJids, getMainGroupJid, getWindowSummary, getTextsForDate, findSenderJidByName } from './db.js';
 import { syncAvatars, getAvatarPath } from './avatars.js';
 import {
   loadBirthdays,
@@ -44,6 +44,7 @@ import { renderBirthdayCard, photoToDataUri } from './birthdayCard.js';
 import { renderWeeklyCard } from './weeklyCard.js';
 import { renderPremiereCard } from './premiereCard.js';
 import { setPairingQr, clearPairingQr, getPairingQr } from './pairingQr.js';
+import { THANKS_TARGET_NAME, isThanksToTarget, buildThanksText, ThanksStreak } from './thanks.js';
 import { loadBackups, saveBackup, setBackupUrlKey, readBackupBuffer, removeBackup } from './groupPhotoBackup.js';
 import { renderWordCloudCard } from './wordcloudCard.js';
 import { buildWordCloud } from './wordcloud.js';
@@ -143,6 +144,7 @@ function debugLog(...args) {
 }
 
 const groupNameCache = new Map();
+const thanksStreak = new ThanksStreak();
 const sentByBot = new Set(); // IDs das mensagens automáticas enviadas pelo próprio bot (não contar)
 
 // IDs de mensagem ja processados (carregado do log em disco, sobrevive a reinicios).
@@ -2496,6 +2498,19 @@ async function startBot() {
         recordMessage();
       } catch (err) {
         console.error('Erro ao gravar mensagem no log:', err);
+      }
+
+      // 3 "Obrigado @Nicholas" seguidos: o bot responde com uma enxurrada de obrigados.
+      try {
+        const targetJid = findSenderJidByName(groupJid, THANKS_TARGET_NAME);
+        const mentionedJids = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
+        const isThanks = isThanksToTarget({ text, mentionedJids, targetJids: [targetJid] });
+        if (thanksStreak.register(groupJid, isThanks) && targetJid) {
+          const sent = await sock.sendMessage(groupJid, { text: buildThanksText(targetJid), mentions: [targetJid] });
+          if (sent?.key?.id) sentByBot.add(sent.key.id);
+        }
+      } catch (err) {
+        console.error('Erro na enxurrada de obrigados:', err);
       }
 
       // Avisa (marcando a pessoa) quando ela bate exatamente algum dos marcos de mensagens do dia.

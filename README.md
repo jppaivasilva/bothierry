@@ -183,6 +183,7 @@ Tudo em `src/` (JavaScript, módulos ES):
 | `weather.js` | Previsão do tempo (Open-Meteo): dados por cidade e texto de reserva. Além das cidades fixas, aceita **cidades temporárias** com data de início e fim (`TEMPORARY_CITIES`; ex.: Tietê de 30/10 a 02/11) que saem sozinhas Tem também cidades de **brincadeira** com previsão fixa (`FAKE_CITIES`, hoje a *Vice City*: sol, 36°). |
 | `wordcloudCard.js` | Desenha o **cartão da nuvem de palavras** (mesmo layout em espiral do painel, feito no servidor com o resvg) |
 | `pairingQr.js` | Guarda o QR de pareamento do WhatsApp e o desenha em SVG pro painel (só admin) quando o bot está deslogado |
+| `thanks.js` | "Obrigado @Nicholas": 3 agradecimentos seguidos ao Nicholas → o bot manda uma enxurrada (8 a 12) de obrigados marcando ele (espera 10 min antes de repetir) |
 | `wordcloud.js` | Conta as palavras do dia pra **nuvem de palavras** do painel (ignora links, menções, comandos, risadas e palavras comuns) |
 | `premiereCard.js` | Desenha o **cartão da estreia do GTA VI** (Vice City, "VI" neon, grade) |
 | `weeklyCard.js` | Desenha o **cartão do resumo semanal** (SVG → PNG), no estilo escuro do cartão de aniversário |
