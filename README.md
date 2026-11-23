@@ -184,6 +184,7 @@ Tudo em `src/` (JavaScript, módulos ES):
 | `wordcloudCard.js` | Desenha o **cartão da nuvem de palavras** (mesmo layout em espiral do painel, feito no servidor com o resvg) |
 | `pairingQr.js` | Guarda o QR de pareamento do WhatsApp e o desenha em SVG pro painel (só admin) quando o bot está deslogado |
 | `thanks.js` | "Obrigado @Nicholas": 3 agradecimentos seguidos ao Nicholas → o bot manda de 8 a 12 mensagens "Obrigado @Nicholas", uma a cada 2 s, marcando ele (espera 10 min antes de repetir) |
+| `versions.js` | Histórico de versões da aba **Versões** (só root): lê os PRs mergeados do git da VM e junta com o texto em português de `changelog.json` |
 | `wordcloud.js` | Conta as palavras do dia pra **nuvem de palavras** do painel (ignora links, menções, comandos, risadas e palavras comuns) |
 | `premiereCard.js` | Desenha o **cartão da estreia do GTA VI** (Vice City, "VI" neon, grade) |
 | `weeklyCard.js` | Desenha o **cartão do resumo semanal** (SVG → PNG), no estilo escuro do cartão de aniversário |
@@ -305,6 +306,7 @@ A sessão é um cookie assinado com HMAC (30 dias), com o papel dentro da assina
 
 - **Visão geral** — mensagens por hora do dia (com 👑 de quem mais falou em cada hora) e **ranking** (Expediente 08h–18h ou dia completo, com seletor de data).
 - **Atividade** — tendência por pessoa (7/14/30 dias) e mapa de calor (dia da semana × hora).
+- **Versões** *(só root)* — histórico dos PRs mergeados (título, resumo em português, data e hash), com a versão que está no ar marcada. **Ao abrir um PR novo, acrescente uma entrada em `changelog.json`** (`pr`, `titulo`, `resumo`); sem ela a aba mostra só o título do PR.
 - **Nuvem** — nuvem de palavras do dia (escolha a data); palavras maiores = mais faladas.
 - **Membros** — todos do grupo, **ordenados pelo ranking de hoje** (quem não falou fica por último), com busca; clicar abre os detalhes da pessoa (pódio, horário preferido, últimos 14 dias). **Admin:** tocar na **foto** (ou no círculo com a inicial) abre o menu **Enviar/Trocar foto** e **Remover foto enviada** (volta pra do WhatsApp); o botão **➕ Adicionar pessoa** inclui na lista quem não está no grupo (ex.: Vini, Felipe Lopes) — ela ganha foto editável, entra na ligação dos aniversários e pode ser removida pelo mesmo menu. A foto enviada vale em todo o painel (ranking, campeões da hora, detalhes) e no cartão de aniversário.
 - **Comandos** — menu de todos os comandos, aniversariantes cadastrados e áudios salvos (o admin vê o ✕ pra apagar).
