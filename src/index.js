@@ -2165,6 +2165,13 @@ async function sendScheduledMessages(sock) {
 // Referencia ao socket ativo, usada pelos crons abaixo (que rodam fora do
 // escopo de startBot e sobrevivem a reconexoes).
 let currentSock = null;
+// Estado da conexao com o WhatsApp, lido pela rota publica /health (monitor externo de queda).
+const waState = { connected: false, since: Date.now(), loggedOut: false };
+function setWaState(connected, loggedOut = false) {
+  if (waState.connected !== connected || waState.loggedOut !== loggedOut) waState.since = Date.now();
+  waState.connected = connected;
+  waState.loggedOut = loggedOut;
+}
 
 cron.schedule(
   `0 ${ARCHIVE_HOUR} * * *`,
@@ -2394,6 +2401,7 @@ async function startBot() {
     if (connection === 'close') {
       const statusCode = lastDisconnect?.error?.output?.statusCode;
       const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+      setWaState(false, !shouldReconnect);
       if (shouldReconnect) {
         const delay = reconnectDelayMs;
         console.log(`Conexao fechada. Reconectando em ${Math.round(delay / 1000)}s...`);
@@ -2412,6 +2420,7 @@ async function startBot() {
     } else if (connection === 'open') {
       reconnectDelayMs = RECONNECT_INITIAL_DELAY_MS;
       clearPairingQr();
+      setWaState(true);
       console.log('✅ Conectado ao WhatsApp! Ouvindo mensagens dos grupos...');
       recordConnectionEvent('connected');
       currentSock = sock;
@@ -2690,6 +2699,7 @@ async function startBot() {
 
 startDashboardServer(DASHBOARD_PORT, {
   getPairingQr,
+  getHealth: () => ({ ...waState }),
   deleteAudio: deleteAudioByName,
   announceEvent: announceNewEvent,
   getCommandsMenu: () => ({

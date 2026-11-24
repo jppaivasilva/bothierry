@@ -408,6 +408,7 @@ ssh -i <chave> ubuntu@<ip-da-vm> "cd ~/bothierry && node --check src/index.js &&
 ### Problemas comuns
 
 - **Conexão caindo toda hora (loop de "Conexão fechada", código 440):** quase sempre são **duas instâncias do bot** usando a mesma sessão do WhatsApp (ex.: um processo esquecido no PC). Confirme com `pm2 list` e feche as outras.
+- **Aviso de queda (monitor externo):** `https://painel.bothierry.com.br/health` responde `200 {"status":"ok"}` com o WhatsApp conectado e `503` (`desconectado`/`deslogado`) quando cai. Cadastre essa URL num monitor gratuito (ex.: UptimeRobot, tipo *HTTP(s)*, intervalo de 5 min, alerta por e-mail/app) pra ser avisado — o monitor também avisa se o painel/VM inteiro sair do ar.
 - **Sessão deslogada:** o bot guarda a sessão antiga (`auth_info.deslogada-<data>/`, só as 2 últimas) e gera um QR novo sozinho. Entre no painel como **admin → Sistema**: o QR aparece no topo (troca a cada ~20 s); leia em *WhatsApp (celular do bot) → Aparelhos conectados → Conectar um aparelho*. O mesmo QR sai no log (`pm2 logs`). Pra desfazer: pare o bot, apague `auth_info/` e renomeie a pasta guardada de volta.
 - **Memória "RSS" alta no painel:** é normal logo após reconexões (buffers nativos do Baileys). Preocupa só se continuar subindo sem parar — o PM2 reinicia sozinho acima de 750 MB.
 - **Link do `!painel` não chega no privado:** o bot avisa no grupo; peça pra pessoa mandar um "oi" pro bot no privado e tentar de novo.

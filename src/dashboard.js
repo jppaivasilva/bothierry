@@ -2417,11 +2417,22 @@ export function startDashboardServer(
     deleteAudio = () => ({ ok: false, error: 'indisponível' }),
     announceEvent = async () => {},
     getPairingQr = () => null,
+    getHealth = () => ({ connected: true, since: Date.now(), loggedOut: false }),
   } = {},
 ) {
   const server = http.createServer((req, res) => {
     const ip = req.socket.remoteAddress || 'unknown';
     const urlObj = new URL(req.url, 'http://localhost');
+
+    // Saude do bot: publica e sem login, pra um monitor externo (UptimeRobot etc.) avisar quando o
+    // WhatsApp cair. 200 = conectado; 503 = desconectado ou deslogado. Nao expoe nada alem disso.
+    if (req.method === 'GET' && urlObj.pathname === '/health') {
+      const h = getHealth();
+      const body = JSON.stringify({ status: h.connected ? 'ok' : h.loggedOut ? 'deslogado' : 'desconectado', desdeSeg: Math.round((Date.now() - h.since) / 1000) });
+      res.writeHead(h.connected ? 200 : 503, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+      res.end(body);
+      return;
+    }
 
     // Favicon: publico (a pagina de login tambem usa) e antes de qualquer checagem de login.
     if (req.method === 'GET' && /^\/(favicon\.ico|favicon-32\.png|apple-touch-icon\.png)$/.test(urlObj.pathname)) {

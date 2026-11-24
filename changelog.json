@@ -278,5 +278,10 @@
   "pr": 56,
   "titulo": "Favicon do painel",
   "resumo": "A foto do bot (redonda) vira o ícone da aba do navegador no painel e na tela de login; também serve de ícone ao salvar o painel na tela inicial do celular."
+ },
+ {
+  "pr": 57,
+  "titulo": "Rota de saúde para monitorar quedas",
+  "resumo": "/health (pública, sem login) responde 200 quando o WhatsApp está conectado e 503 quando cai ou é deslogado, pra um monitor externo avisar por e-mail/celular."
  }
 ]
