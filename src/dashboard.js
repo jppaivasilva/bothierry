@@ -4,7 +4,7 @@ import crypto from 'crypto';
 import os from 'os';
 import path from 'path';
 import { getDashboardData, getMessagesPerHourForDate, getSystemStats, getSystemStatsHistory } from './metrics.js';
-import { getTextsForDate, getCountsBetween, getMainGroupJid, getMessageTrend, getActivityHeatmap, getTopSenderPerHour, getMemberList, getMemberStats } from './db.js';
+import { getAllRecordsForGroup, getTextsForDate, getCountsBetween, getMainGroupJid, getMessageTrend, getActivityHeatmap, getTopSenderPerHour, getMemberList, getMemberStats } from './db.js';
 import { loadBirthdays } from './birthdays.js';
 import { resolveBirthdayMember, suggestBirthdayMembers, setBirthdayLink, normalizeName } from './birthdayLinks.js';
 import { getMembersWithExtras, addExtraMember, removeExtraMember } from './extraMembers.js';
@@ -14,6 +14,10 @@ import { formatDisplayName } from './displayNames.js';
 import { buildWordCloud } from './wordcloud.js';
 import { qrToSvg } from './pairingQr.js';
 import { getVersionHistory } from './versions.js';
+import { buildProfile } from './profile.js';
+import { computeWrapped } from './wrapped.js';
+import { renderWrappedPersonCard } from './wrappedCard.js';
+import { photoToDataUri } from './birthdayCard.js';
 import { getUsageSummary } from './usage.js';
 import { getFavicon, FAVICON_TAGS } from './favicon.js';
 import { getAvatarPath } from './avatars.js';
@@ -537,6 +541,13 @@ ${FAVICON_TAGS}
   .ver-meta { font-size: 12px; color: var(--text-secondary); margin-top: 6px; }
   .ver-meta a { color: var(--accent-blue); text-decoration: none; font-weight: 600; }
   .ver-live { display: inline-block; margin-left: 8px; font-size: 11px; font-weight: 800; color: #fff; background: var(--accent-green); border-radius: 999px; padding: 2px 8px; vertical-align: middle; }
+  .prof-head { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; flex-wrap: wrap; }
+  .prof-head img, .prof-head .avatar-fallback { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; font-size: 26px; box-shadow: 0 0 0 3px #fff, 0 6px 16px rgba(0,0,0,.14); }
+  .prof-name { font-size: 24px; font-weight: 800; color: var(--text-primary); }
+  .prof-badge { display: inline-block; margin-top: 4px; font-size: 12px; font-weight: 800; color: #2b0f5e; background: linear-gradient(90deg, #ffd166, #ff8fb8); border-radius: 999px; padding: 3px 12px; }
+  .prof-bars { display: flex; align-items: flex-end; gap: 3px; height: 90px; }
+  .prof-bars div { flex: 1; background: var(--accent-blue); opacity: .85; border-radius: 3px 3px 0 0; min-height: 2px; }
+  .prof-wrapped { max-width: 340px; width: 100%; border-radius: 22px; box-shadow: 0 10px 30px rgba(0,0,0,.18); display: block; }
   .wc-box { position: relative; width: 100%; height: 480px; overflow: hidden; }
   .wc-word { position: absolute; line-height: 1; white-space: nowrap; font-weight: 800; letter-spacing: -.02em; cursor: default; transition: transform .15s var(--ease-out); }
   .wc-word:hover { transform: scale(1.08); }
@@ -629,6 +640,7 @@ ${FAVICON_TAGS}
       <button class="tab-btn" data-tab="activity">Atividade</button>
       <button class="tab-btn" data-tab="cloud">Nuvem</button>
       <button class="tab-btn" data-tab="members">Membros</button>
+      <button class="tab-btn" data-tab="profiles">Perfis</button>
       <button class="tab-btn" data-tab="menu">Comandos</button>
       <button class="tab-btn" data-tab="events">Eventos</button>
       <button class="tab-btn" data-tab="system">Sistema</button>
@@ -742,6 +754,12 @@ ${FAVICON_TAGS}
     <button class="action-btn admin-only" id="addPersonBtn">➕ Adicionar pessoa</button>
   </div>
   <div id="memberGrid" class="member-grid"></div>
+  </div>
+
+  <div id="tab-profiles" class="tab-panel">
+  <div class="sub">A página de cada membro: números do ano, histórico, palavras favoritas e o Wrapped</div>
+  <select id="profileSelect" class="member-search" style="max-width:320px;"><option value="">Escolha uma pessoa…</option></select>
+  <div id="profileBody"></div>
   </div>
 
   <div id="tab-menu" class="tab-panel">
@@ -906,6 +924,7 @@ document.querySelectorAll('.tabs:not(#rankingToggle) > .tab-btn').forEach((btn) 
     if (btn.dataset.tab === 'versions') loadVersions();
     if (btn.dataset.tab === 'usage') loadUsage();
     if (btn.dataset.tab === 'members') loadMembers();
+    if (btn.dataset.tab === 'profiles') loadProfilesList();
     if (btn.dataset.tab === 'menu') loadMenu();
     if (btn.dataset.tab === 'events') loadEvents();
   });
@@ -1576,14 +1595,18 @@ let cloudWords = [];
 const CLOUD_COLORS = ['#007aff', '#af52de', '#ff9500', '#34c759', '#ff2d55', '#5856d6'];
 
 function layoutCloud() {
-  const box = document.getElementById('cloudBox');
+  layoutWordsInto(document.getElementById('cloudBox'), cloudWords, 'Ninguém falou nada nesse dia 🤐', 480, 680);
+}
+
+// Desenha uma nuvem de palavras dentro do elemento box (alturas: desktop / celular).
+function layoutWordsInto(box, cloudWords, emptyText, heightDesktop, heightMobile) {
   box.innerHTML = '';
   if (cloudWords.length === 0) {
-    box.innerHTML = '<div class="wc-empty">Ninguém falou nada nesse dia 🤐</div>';
+    box.innerHTML = '<div class="wc-empty">' + emptyText + '</div>';
     return;
   }
   // No celular a caixa e estreita: fica mais alta pra caberem mais palavras.
-  box.style.height = (box.clientWidth < 600 ? 680 : 480) + 'px';
+  box.style.height = (box.clientWidth < 600 ? heightMobile : heightDesktop) + 'px';
   const W = box.clientWidth;
   const H = box.clientHeight;
   const maxCount = cloudWords[0].count;
@@ -1654,6 +1677,61 @@ async function checkPairingQr() {
   }
 }
 setInterval(checkPairingQr, 4000);
+
+// ---------- Perfis ----------
+let profilesLoaded = false;
+async function loadProfilesList() {
+  if (profilesLoaded) return;
+  profilesLoaded = true;
+  const members = await fetch('/api/members').then((r) => r.json());
+  members.forEach((m) => { if (m.photoV) avatarBust[m.jid] = m.photoV; });
+  const sel = document.getElementById('profileSelect');
+  sel.innerHTML = '<option value="">Escolha uma pessoa…</option>' +
+    members.slice().sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')).map((m) => '<option value="' + escapeHtml(m.jid) + '" data-name="' + escapeHtml(m.name) + '">' + escapeHtml(m.name) + '</option>').join('');
+}
+
+function profileTiles(items) {
+  return '<div class="cards">' + items.map((i) => '<div class="card"><div class="label">' + i[0] + '</div><div class="value" style="font-size:24px;">' + i[1] + '</div><div class="label">' + i[2] + '</div></div>').join('') + '</div>';
+}
+
+async function showProfile(jid, name) {
+  const body = document.getElementById('profileBody');
+  if (!jid) { body.innerHTML = ''; return; }
+  body.innerHTML = '<div class="ver-desc">Carregando…</div>';
+  const res = await fetch('/api/profile?jid=' + encodeURIComponent(jid));
+  if (!res.ok) { body.innerHTML = '<div class="chart-box">Ainda não há mensagens dessa pessoa no histórico.</div>'; return; }
+  const p = await res.json();
+  const st = p.stats;
+  const fmtD = (d) => d.split('-').reverse().join('/');
+  let html = '<div class="prof-head">' + avatarImg(jid, name, 'avatar-mini') + '<div><div class="prof-name">' + escapeHtml(name) + '</div>' +
+    (st ? '<span class="prof-badge">' + escapeHtml(st.badge.title) + ' · ' + escapeHtml(st.badge.desc) + '</span>' : '') + '</div></div>';
+  html += profileTiles([
+    ['Mensagens em ' + p.year, st ? st.total.toLocaleString('pt-BR') : '0', st ? '#' + st.rank + ' de ' + st.of + ' · ' + st.percent + '% do grupo' : 'nenhuma neste ano'],
+    ['Total de sempre', p.totalAllTime.toLocaleString('pt-BR'), 'desde ' + fmtD(p.firstDate)],
+    ['Dia mais movimentado', fmtD(p.busiestDate), p.busiestCount + ' mensagens'],
+    ['Maior sequência', st ? st.streak + ' dias' : '—', 'falando todo dia'],
+    ['Campeão do dia', st ? st.championDays + 'x' : '—', 'dias em 1º lugar'],
+    ['Horário favorito', st ? st.peakHour + 'h' : '—', st ? st.favoriteWeekday : ''],
+  ]);
+  const max60 = Math.max(1, ...p.daily.map((d) => d.count));
+  html += '<div class="chart-box" style="margin-bottom:20px;"><div class="title">Últimos 60 dias</div><div class="prof-bars" style="margin-top:12px;">' +
+    p.daily.map((d) => '<div title="' + fmtD(d.date) + ': ' + d.count + '" style="height:' + Math.max(2, Math.round((d.count / max60) * 90)) + 'px;"></div>').join('') + '</div></div>';
+  const maxH = Math.max(1, ...p.perHour);
+  html += '<div class="charts"><div class="chart-box"><div class="title">Por hora do dia</div><div class="prof-bars" style="margin-top:12px;">' +
+    p.perHour.map((n, h) => '<div title="' + h + 'h: ' + n + '" style="height:' + Math.max(2, Math.round((n / maxH) * 90)) + 'px;"></div>').join('') + '</div></div></div>';
+  html += '<div class="chart-box" style="margin-bottom:20px;"><div class="title">Palavras favoritas</div><div id="profileCloud" class="wc-box" style="margin-top:10px;"></div></div>';
+  if (st) {
+    html += '<div class="chart-box"><div class="title">Bothierry Wrapped ' + p.year + '</div><div style="margin-top:12px;">' +
+      '<img class="prof-wrapped" src="/api/profile-wrapped.png?jid=' + encodeURIComponent(jid) + '" alt="Wrapped" />' +
+      '<div class="ver-meta"><a href="/api/profile-wrapped.png?jid=' + encodeURIComponent(jid) + '" download="wrapped-' + escapeHtml(name) + '.png">baixar o cartão</a></div></div></div>';
+  }
+  body.innerHTML = html;
+  layoutWordsInto(document.getElementById('profileCloud'), p.words, 'Sem palavras suficientes ainda.', 300, 420);
+}
+document.getElementById('profileSelect').addEventListener('change', (e) => {
+  const opt = e.target.selectedOptions[0];
+  showProfile(e.target.value, opt ? opt.dataset.name : '');
+});
 
 // ---------- Consumo da OpenAI (admin) ----------
 function fmtUsd(v) { return 'US$ ' + (v >= 1 ? v.toFixed(2) : v.toFixed(4)); }
@@ -2605,6 +2683,37 @@ export function startDashboardServer(
       const groupJid = getMainGroupJid();
       const cloud = groupJid ? buildWordCloud(getTextsForDate(groupJid, date)) : { totalMessages: 0, distinctWords: 0, words: [] };
       sendJson(res, 200, { date, ...cloud });
+    } else if (req.url.startsWith('/api/profile-wrapped.png')) {
+      // Cartao Wrapped da pessoa (o mesmo do !wrapped), desenhado na hora.
+      const jid = new URL(req.url, 'http://localhost').searchParams.get('jid');
+      const groupJid = getMainGroupJid();
+      const year = Number(new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date()).slice(0, 4));
+      const stats = groupJid && jid ? computeWrapped(getAllRecordsForGroup(groupJid), year)?.people.get(jid) : null;
+      if (!stats) {
+        res.writeHead(404, { 'Content-Type': 'text/plain' });
+        res.end('sem dados');
+      } else {
+        (async () => {
+          let photoUri = null;
+          try {
+            const photoPath = getUploadedPhotoMap().get(jid) || getAvatarPath(jid);
+            if (photoPath) photoUri = await photoToDataUri(await fs.promises.readFile(photoPath));
+          } catch {
+            // sem foto: o cartao usa a inicial
+          }
+          res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'no-store' });
+          res.end(renderWrappedPersonCard(stats, year, photoUri));
+        })().catch(() => {
+          res.writeHead(500);
+          res.end();
+        });
+      }
+    } else if (req.url.startsWith('/api/profile?') || req.url === '/api/profile') {
+      const jid = new URL(req.url, 'http://localhost').searchParams.get('jid');
+      const groupJid = getMainGroupJid();
+      const profile = groupJid && jid ? buildProfile(getAllRecordsForGroup(groupJid), jid) : null;
+      if (!profile) return sendJson(res, 404, { error: 'sem mensagens dessa pessoa' });
+      sendJson(res, 200, profile);
     } else if (req.url === '/api/admin/versions' && req.method === 'GET') {
       if (!isAdmin(req)) return sendJson(res, 403, { error: 'só o administrador pode ver isso' });
       sendJson(res, 200, getVersionHistory());
