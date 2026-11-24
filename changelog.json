@@ -298,5 +298,10 @@
   "pr": 60,
   "titulo": "Limite diário de IA: US$ 5",
   "resumo": "O padrão da trava de gasto diário da IA passa de US$ 1 para US$ 5 (continua mudando com AI_DAILY_BUDGET_USD no .env)."
+ },
+ {
+  "pr": 61,
+  "titulo": "Bothierry Wrapped",
+  "resumo": "O ano em números: !wrapped manda o cartão de quem digitou (mensagens, posição, horário e dia favoritos, maior sequência, campeão do dia, palavras mais usadas); !wrapped grupo manda o do grupo, que também sai sozinho em 31/12 às 18h30."
  }
 ]
