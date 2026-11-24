@@ -283,5 +283,10 @@
   "pr": 57,
   "titulo": "Rota de saúde para monitorar quedas",
   "resumo": "/health (pública, sem login) responde 200 quando o WhatsApp está conectado e 503 quando cai ou é deslogado, pra um monitor externo avisar por e-mail/celular."
+ },
+ {
+  "pr": 58,
+  "titulo": "Backup noturno dos dados",
+  "resumo": "Todo dia às 03h40 o bot compacta os dados (mensagens, aniversários, eventos, áudios, fotos…) em backups/ e guarda os 7 últimos; com BACKUP_RCLONE_REMOTE no .env, também copia pra fora da VM. Segredos ficam de fora."
  }
 ]

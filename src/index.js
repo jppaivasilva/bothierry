@@ -45,6 +45,7 @@ import { renderWeeklyCard } from './weeklyCard.js';
 import { renderPremiereCard } from './premiereCard.js';
 import { setPairingQr, clearPairingQr, getPairingQr } from './pairingQr.js';
 import { trackOpenAIUsage } from './usage.js';
+import { runBackup } from './backup.js';
 import { TOPICS, sendTopicNews } from './gameNews.js';
 import { THANKS_TARGET_NAME, THANKS_INTERVAL_MS, isThanksToTarget, buildThanksText, pickThanksCount, ThanksStreak } from './thanks.js';
 import { loadBackups, saveBackup, setBackupUrlKey, readBackupBuffer, removeBackup } from './groupPhotoBackup.js';
@@ -2284,6 +2285,21 @@ cron.schedule(
   () => {
     recordCronRun('noticias_games');
     if (currentSock) sendGameNews(currentSock).catch((err) => console.error('Erro ao mandar noticia de games (cron):', err));
+  },
+  CRON_OPTIONS
+);
+
+cron.schedule(
+  '40 3 * * *',
+  async () => {
+    recordCronRun('backup');
+    try {
+      const r = await runBackup();
+      console.log(`💾 Backup: ${r.file ? `${(r.bytes / 1024 / 1024).toFixed(1)} MB, ${r.paths} itens` : r.note}${r.remote ? ' (copiado pro rclone)' : ''}`);
+      if (r.remoteError) console.error(`Erro ao copiar o backup pro rclone (a copia local foi feita): ${r.remoteError}`);
+    } catch (err) {
+      console.error('Erro ao fazer o backup noturno:', err);
+    }
   },
   CRON_OPTIONS
 );
