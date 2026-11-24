@@ -183,6 +183,7 @@ Tudo em `src/` (JavaScript, módulos ES):
 | `weather.js` | Previsão do tempo (Open-Meteo): dados por cidade e texto de reserva. Além das cidades fixas, aceita **cidades temporárias** com data de início e fim (`TEMPORARY_CITIES`; ex.: Tietê de 30/10 a 02/11) que saem sozinhas Tem também cidades de **brincadeira** com previsão fixa (`FAKE_CITIES`, hoje a *Vice City*: sol, 36°). |
 | `wordcloudCard.js` | Desenha o **cartão da nuvem de palavras** (mesmo layout em espiral do painel, feito no servidor com o resvg) |
 | `pairingQr.js` | Guarda o QR de pareamento do WhatsApp e o desenha em SVG pro painel (só admin) quando o bot está deslogado |
+| `gameNews.js` | **Notícias de games** (12h e 19h): lê os feeds RSS em português (IGN Brasil, Canaltech Games), a IA escolhe/ranqueia pelo interesse do grupo, e o bot manda o link **com a miniatura** (a previa é montada à mão e só manda notícia que tenha imagem). Não repete (`news_sent.json`, só na VM). Estrutura por assunto (`TOPICS`) pra entrarem outros |
 | `thanks.js` | "Obrigado @Nicholas": 3 agradecimentos seguidos ao Nicholas → o bot manda de 8 a 12 mensagens "Obrigado @Nicholas", uma a cada 2 s, marcando ele (espera 10 min antes de repetir) |
 | `usage.js` | Registra cada chamada à OpenAI (tokens + custo **estimado** pela tabela de preços do arquivo) em `openai_usage.jsonl` (só na VM) e resume pra aba **Consumo**; a funcionalidade vem do nome da função que chamou |
 | `versions.js` | Histórico de versões da aba **Versões** (só root): lê os PRs mergeados do git da VM e junta com o texto em português de `changelog.json` |
@@ -341,6 +342,7 @@ Use `!` ou `/` no começo. `!menu` lista tudo no próprio WhatsApp (e a aba **Co
 | `!regras` · `!regulamento` · `!megasena` | textos fixos |
 | `!policiafederal` · `!otario` | zoeiras |
 | `!testarbomdia` *(oculto)* | manda o bom dia (com o cartão de previsão) só no grupo onde for digitado; `!testarbomdia gtavi` mostra a versão Vice City |
+| `!testarnoticias` *(oculto)* | manda uma notícia de games agora só no grupo onde for digitado e, se não mandar, diz o motivo e quais fontes responderam |
 | `!testarestreia` *(oculto)* | manda o cartão da estreia só no grupo onde for digitado (sem marcar todo mundo) |
 | `!testarnuvem` *(oculto)* | manda o cartão da nuvem de palavras de hoje só no grupo onde for digitado |
 | `!resumosemanal` *(oculto)* | manda o resumo semanal (cartão) só no grupo onde for digitado |

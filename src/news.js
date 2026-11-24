@@ -1,14 +1,14 @@
 const G1_RSS_URL = 'https://g1.globo.com/rss/g1/';
 
 // Extrai o conteudo de uma tag XML simples (primeira ocorrencia), removendo CDATA se houver.
-function extractXmlTag(xml, tag) {
+export function extractXmlTag(xml, tag) {
   const match = xml.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`));
   if (!match) return null;
   const cdataMatch = match[1].match(/<!\[CDATA\[([\s\S]*?)\]\]>/);
   return (cdataMatch ? cdataMatch[1] : match[1]).trim();
 }
 
-function decodeXmlEntities(str) {
+export function decodeXmlEntities(str) {
   return str
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')

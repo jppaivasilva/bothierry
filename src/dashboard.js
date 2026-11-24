@@ -1241,6 +1241,7 @@ async function refresh() {
     foto_grupo_noticia: 'Foto do grupo (notícia)',
     ranking_semanal: 'Ranking semanal',
     resumo_semanal: 'Resumo semanal (domingo 21h)',
+    noticias_games: 'Notícia de games (12h e 19h)',
     estreia_gtavi: 'Cartão da estreia do GTA VI (19/11, 00h)',
   };
   const cronsBody = document.getElementById('cronsBody');
