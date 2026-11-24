@@ -303,5 +303,10 @@
   "pr": 61,
   "titulo": "Bothierry Wrapped",
   "resumo": "O ano em números: !wrapped manda o cartão de quem digitou (mensagens, posição, horário e dia favoritos, maior sequência, campeão do dia, palavras mais usadas); !wrapped grupo manda o do grupo, que também sai sozinho em 31/12 às 18h30."
+ },
+ {
+  "pr": 62,
+  "titulo": "Painel pode escutar só localmente",
+  "resumo": "DASHBOARD_HOST=127.0.0.1 no .env faz o painel responder só pela máquina (via túnel do Cloudflare, com HTTPS), fechando o acesso direto por http://IP:4321 sem criptografia."
  }
 ]
