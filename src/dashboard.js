@@ -14,6 +14,7 @@ import { formatDisplayName } from './displayNames.js';
 import { buildWordCloud } from './wordcloud.js';
 import { qrToSvg } from './pairingQr.js';
 import { getVersionHistory } from './versions.js';
+import { getUsageSummary } from './usage.js';
 import { getAvatarPath } from './avatars.js';
 import { loadEvents, addEvent, deleteEvent, eventTitleExists, addAttendee, addAbsentee } from './events.js';
 
@@ -625,6 +626,7 @@ const DASHBOARD_HTML = `<!doctype html>
       <button class="tab-btn" data-tab="events">Eventos</button>
       <button class="tab-btn" data-tab="system">Sistema</button>
       <button class="tab-btn" data-tab="server">Servidor</button>
+      <button class="tab-btn admin-only" data-tab="usage">Consumo</button>
       <button class="tab-btn admin-only" data-tab="versions">Versões</button>
     </div>
 
@@ -828,6 +830,20 @@ const DASHBOARD_HTML = `<!doctype html>
   </div>
   </div>
 
+  <div id="tab-usage" class="tab-panel">
+  <div class="sub" id="usageSub">Consumo da OpenAI pelo bot · só o root vê esta aba</div>
+  <div class="cards" id="usageCards"></div>
+  <div class="chart-box" style="margin-bottom:20px;">
+    <div class="title">Custo por dia (últimos 30 dias, US$)</div>
+    <div id="usageBars" style="margin-top:14px;"></div>
+  </div>
+  <div class="charts">
+    <div class="chart-box"><div class="title">Por funcionalidade (30 dias)</div><div id="usageByFeature" style="margin-top:10px;"></div></div>
+    <div class="chart-box"><div class="title">Por modelo (30 dias)</div><div id="usageByModel" style="margin-top:10px;"></div></div>
+  </div>
+  <div class="sub" style="margin-top:16px;">Valores <b>estimados</b> a partir dos tokens que o bot registrou desde que esta aba existe, com a tabela de preços do código (<code>src/usage.js</code>). O valor oficial está em platform.openai.com → Usage.</div>
+  </div>
+
   <div id="tab-versions" class="tab-panel">
   <div class="sub">Histórico do que foi implementado, um item por PR mergeado · só o root vê esta aba</div>
   <div id="versionsList"></div>
@@ -879,6 +895,7 @@ document.querySelectorAll('.tabs:not(#rankingToggle) > .tab-btn').forEach((btn) 
     if (btn.dataset.tab === 'server' && systemHistoryChart) systemHistoryChart.resize();
     if (btn.dataset.tab === 'cloud') loadCloud();
     if (btn.dataset.tab === 'versions') loadVersions();
+    if (btn.dataset.tab === 'usage') loadUsage();
     if (btn.dataset.tab === 'members') loadMembers();
     if (btn.dataset.tab === 'menu') loadMenu();
     if (btn.dataset.tab === 'events') loadEvents();
@@ -1625,6 +1642,31 @@ async function checkPairingQr() {
   }
 }
 setInterval(checkPairingQr, 4000);
+
+// ---------- Consumo da OpenAI (admin) ----------
+function fmtUsd(v) { return 'US$ ' + (v >= 1 ? v.toFixed(2) : v.toFixed(4)); }
+function fmtTok(n) { return n >= 1000000 ? (n / 1000000).toFixed(2) + ' mi' : n >= 1000 ? (n / 1000).toFixed(1) + ' mil' : String(n); }
+function usageRows(list) {
+  if (!list.length) return '<div class="ver-desc">Ainda sem chamadas registradas.</div>';
+  return '<table style="width:100%;"><tr><th style="text-align:left;">Nome</th><th>Chamadas</th><th>Tokens (ent./saída)</th><th>Custo</th></tr>' +
+    list.map((r) => '<tr><td>' + escapeHtml(r.name) + '</td><td style="text-align:center;">' + r.calls + '</td><td style="text-align:center;">' + fmtTok(r.inTok) + ' / ' + fmtTok(r.outTok) + '</td><td style="text-align:right;">' + fmtUsd(r.costUsd) + (r.unpriced ? ' <span title="chamadas sem preço cadastrado">+?</span>' : '') + '</td></tr>').join('') + '</table>';
+}
+async function loadUsage() {
+  try {
+    const u = await fetch('/api/admin/usage').then((r) => r.json());
+    if (!u.totals) { document.getElementById('usageSub').textContent = 'Não consegui carregar o consumo.'; return; }
+    document.getElementById('usageSub').textContent = u.since ? 'Consumo da OpenAI pelo bot, registrado desde ' + u.since.split('-').reverse().join('/') + ' · só o root vê esta aba' : 'Ainda sem chamadas registradas — o consumo aparece aqui conforme o bot usar a OpenAI.';
+    const card = (label, t, color) => '<div class="card"><div class="label"><span class="dot" style="--dot-color:' + color + '"></span>' + label + '</div><div class="value" style="font-size:26px;">' + fmtUsd(t.costUsd) + '</div><div class="label">' + t.calls + ' chamadas · ' + fmtTok(t.inTok + t.outTok) + ' tokens</div></div>';
+    document.getElementById('usageCards').innerHTML = card('Hoje', u.totals.today, 'var(--accent-green)') + card('7 dias', u.totals.week, 'var(--accent-blue)') + card('30 dias', u.totals.month, 'var(--accent-orange)') + card('Total', u.totals.all, 'var(--accent-purple)');
+    const max = Math.max(0.0001, ...u.daily.map((d) => d.costUsd));
+    document.getElementById('usageBars').innerHTML = '<div style="display:flex; align-items:flex-end; gap:3px; height:120px;">' +
+      u.daily.map((d) => '<div title="' + d.date.split('-').reverse().join('/') + ': ' + fmtUsd(d.costUsd) + '" style="flex:1; background:var(--accent-blue); opacity:.85; border-radius:3px 3px 0 0; height:' + Math.max(2, Math.round((d.costUsd / max) * 120)) + 'px;"></div>').join('') + '</div>';
+    document.getElementById('usageByFeature').innerHTML = usageRows(u.byFeature);
+    document.getElementById('usageByModel').innerHTML = usageRows(u.byModel);
+  } catch (err) {
+    document.getElementById('usageSub').textContent = 'Não consegui carregar o consumo.';
+  }
+}
 
 // ---------- Versoes (admin) ----------
 async function loadVersions() {
@@ -2517,6 +2559,9 @@ export function startDashboardServer(
     } else if (req.url === '/api/admin/versions' && req.method === 'GET') {
       if (!isAdmin(req)) return sendJson(res, 403, { error: 'só o administrador pode ver isso' });
       sendJson(res, 200, getVersionHistory());
+    } else if (req.url === '/api/admin/usage' && req.method === 'GET') {
+      if (!isAdmin(req)) return sendJson(res, 403, { error: 'só o administrador pode ver isso' });
+      sendJson(res, 200, getUsageSummary());
     } else if (req.url === '/api/admin/qr' && req.method === 'GET') {
       // QR de pareamento do WhatsApp: so existe enquanto o bot esta deslogado esperando leitura.
       if (!isAdmin(req)) return sendJson(res, 403, { error: 'só o administrador pode ver isso' });
