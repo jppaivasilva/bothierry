@@ -1,0 +1,21 @@
+# Barra codigo quebrado antes de ir pro ar: o deploy da VM puxa a main sozinho,
+# entao todo PR precisa passar aqui (lint de variavel indefinida + testes).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm test

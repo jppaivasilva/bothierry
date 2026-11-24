@@ -270,7 +270,7 @@ async function isIphoneDepreciative(text) {
             'Primeiro, explique em uma linha curta o sentido real da frase (ela elogia ou critica o iPhone de verdade?). ' +
             'Depois, na ultima linha, responda EXATAMENTE no formato "RESPOSTA: SIM" ou "RESPOSTA: NAO".',
         },
-        { role: 'user', content: quotedText ? `Mensagem anterior do bot, a que a pessoa esta respondendo: "${quotedText}"\n\nMensagem da pessoa: ${text}` : text },
+        { role: 'user', content: text },
       ],
       max_tokens: 100,
     });
@@ -322,7 +322,7 @@ async function isInsultToBot(text, quotedText = null) {
             'Primeiro, explique em uma linha curta o tom real da mensagem. ' +
             'Depois, na ultima linha, responda EXATAMENTE no formato "RESPOSTA: SIM" ou "RESPOSTA: NAO".',
         },
-        { role: 'user', content: text },
+        { role: 'user', content: quotedText ? `Mensagem anterior do bot, a que a pessoa esta respondendo: "${quotedText}"\n\nMensagem da pessoa: ${text}` : text },
       ],
       max_tokens: 100,
     });
