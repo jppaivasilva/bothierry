@@ -91,6 +91,17 @@ export async function saveMemberPhoto(jid, buffer) {
   fs.writeFileSync(memberPhotoPath(jid), jpeg);
 }
 
+/** Passa a foto enviada de `from` pra `to` (so se `to` ainda nao tiver uma); a de `from` some. */
+export function moveMemberPhoto(from, to) {
+  try {
+    if (!fs.existsSync(memberPhotoPath(from))) return;
+    if (!fs.existsSync(memberPhotoPath(to))) fs.renameSync(memberPhotoPath(from), memberPhotoPath(to));
+    else fs.unlinkSync(memberPhotoPath(from));
+  } catch {
+    // foto e so enfeite: se nao der pra mover, fica como esta
+  }
+}
+
 export function deleteMemberPhoto(jid) {
   try {
     fs.unlinkSync(memberPhotoPath(jid));
