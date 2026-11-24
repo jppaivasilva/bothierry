@@ -17,7 +17,7 @@ async function getSharp() {
   if (!sharpModule) sharpModule = (await import('sharp')).default;
   return sharpModule;
 }
-import { logMessage, getDailyCounts, getCountsSince, getCountsBetween, getMessagesSince, extractUrls, wasUrlSentSince, loadSeenMessageIds, archiveOldMessages, getRecentSenderJids, getMainGroupJid, getWindowSummary, getTextsForDate, findSenderJidByName, getMemberList } from './db.js';
+import { logMessage, getDailyCounts, getCountsSince, getCountsBetween, getMessagesSince, extractUrls, wasUrlSentSince, loadSeenMessageIds, archiveOldMessages, getRecentSenderJids, getMainGroupJid, getWindowSummary, getTextsForDate, findSenderJidByName, getMemberList, getAllRecordsForGroup } from './db.js';
 import { syncAvatars, getAvatarPath } from './avatars.js';
 import {
   loadBirthdays,
@@ -46,6 +46,8 @@ import { renderPremiereCard } from './premiereCard.js';
 import { setPairingQr, clearPairingQr, getPairingQr } from './pairingQr.js';
 import { trackOpenAIUsage } from './usage.js';
 import { runBackup } from './backup.js';
+import { computeWrapped } from './wrapped.js';
+import { renderWrappedPersonCard, renderWrappedGroupCard } from './wrappedCard.js';
 import { TOPICS, sendTopicNews } from './gameNews.js';
 import { THANKS_TARGET_NAME, THANKS_INTERVAL_MS, isThanksToTarget, buildThanksText, pickThanksCount, ThanksStreak } from './thanks.js';
 import { loadBackups, saveBackup, setBackupUrlKey, readBackupBuffer, removeBackup } from './groupPhotoBackup.js';
@@ -834,6 +836,7 @@ const COMMAND_CATEGORIES = [
     title: 'Ranking e regras',
     commands: [
       { name: 'ranking', description: 'ranking de mensagens de hoje, com percentual e total' },
+      { name: 'wrapped', description: 'seu Bothierry Wrapped do ano (use "!wrapped grupo" pro do grupo)' },
       { name: 'regras', description: 'lista as regras do grupo' },
       { name: 'regulamento', description: 'mostra o manifesto oficial do grupo' },
     ],
@@ -883,6 +886,7 @@ const COMMAND_CATEGORIES = [
 // registre aqui e adicione a descricao em COMMAND_HELP.
 const commands = {
   ranking: commandRanking,
+  wrapped: commandWrapped,
   aniversariantes: commandAniversariantes,
   eventos: commandEventos,
   addevento: commandAddEvento,
@@ -1453,6 +1457,40 @@ async function commandTestarNoticias({ sock, groupJid }) {
     console.error('Erro ao mandar noticia de games:', err);
     await sock.sendMessage(groupJid, { text: 'Não consegui mandar a notícia agora (veja o log).' });
   }
+}
+
+// Bothierry Wrapped: o ano em numeros. "!wrapped" manda o cartao de quem digitou,
+// "!wrapped grupo" o do grupo (que tambem sai sozinho em 31/12, ver cron abaixo).
+async function sendWrappedGroup(sock, groupJid) {
+  const year = Number(getBrasiliaNow().date.slice(0, 4));
+  const wrapped = computeWrapped(getAllRecordsForGroup(groupJid), year);
+  if (!wrapped) return sock.sendMessage(groupJid, { text: `Ainda não tenho mensagens de ${year} pra montar o Wrapped.` });
+  const image = renderWrappedGroupCard(wrapped.group, wrapped.since);
+  const sent = await sock.sendMessage(groupJid, { image, caption: `🎁 *Bothierry Wrapped ${year}* — o ano do grupo em números! Digite *!wrapped* pra ver o seu.` });
+  if (sent?.key?.id) sentByBot.add(sent.key.id);
+  return sent;
+}
+
+async function commandWrapped({ sock, groupJid, msg, args }) {
+  if (/^grupo$/i.test(String(args ?? '').trim())) return sendWrappedGroup(sock, groupJid);
+
+  const senderJid = msg.key.participant || msg.key.remoteJid;
+  const year = Number(getBrasiliaNow().date.slice(0, 4));
+  const wrapped = computeWrapped(getAllRecordsForGroup(groupJid), year);
+  const stats = wrapped?.people.get(senderJid);
+  if (!stats) return sock.sendMessage(groupJid, { text: `Não achei mensagens suas em ${year} pra montar o seu Wrapped.` }, { quoted: msg });
+
+  let photoUri = null;
+  try {
+    const buffer = readMemberPhoto(senderJid) || (await getBirthdayPhotoBuffer(sock, senderJid));
+    if (buffer) photoUri = await photoToDataUri(buffer);
+  } catch (err) {
+    console.error('Erro ao preparar a foto do Wrapped:', err);
+  }
+  const image = renderWrappedPersonCard(stats, year, photoUri);
+  const sent = await sock.sendMessage(groupJid, { image, caption: `🎁 Seu Bothierry Wrapped ${year}, ${stats.name}!` }, { quoted: msg });
+  if (sent?.key?.id) sentByBot.add(sent.key.id);
+  return sent;
 }
 
 // Mensagem automatica das 18h: soma o tempo "perdido" e o ranking completo do
@@ -2299,6 +2337,19 @@ cron.schedule(
       if (r.remoteError) console.error(`Erro ao copiar o backup pro rclone (a copia local foi feita): ${r.remoteError}`);
     } catch (err) {
       console.error('Erro ao fazer o backup noturno:', err);
+    }
+  },
+  CRON_OPTIONS
+);
+
+cron.schedule(
+  '30 18 31 12 *',
+  () => {
+    recordCronRun('wrapped_grupo');
+    if (currentSock) {
+      findMainGroupJid(currentSock)
+        .then((groupJid) => groupJid && sendWrappedGroup(currentSock, groupJid))
+        .catch((err) => console.error('Erro ao mandar o Wrapped do grupo (cron):', err));
     }
   },
   CRON_OPTIONS

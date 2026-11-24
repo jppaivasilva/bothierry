@@ -188,6 +188,7 @@ Tudo em `src/` (JavaScript, módulos ES):
 | `usage.js` | Registra cada chamada à OpenAI (tokens + custo **estimado** pela tabela de preços do arquivo) em `openai_usage.jsonl` (só na VM) e resume pra aba **Consumo**; a funcionalidade vem do nome da função que chamou |
 | `versions.js` | Histórico de versões da aba **Versões** (só root): lê os PRs mergeados do git da VM e junta com o texto em português de `changelog.json` |
 | `favicon.js` | Favicon do painel: a foto do bot recortada em círculo, gerada em 32/48/180 px (rotas públicas `/favicon.ico`, `/favicon-32.png`, `/apple-touch-icon.png`) |
+| `wrapped.js` · `wrappedCard.js` | **Bothierry Wrapped**: calcula o ano por pessoa e do grupo (total, posição, horário/dia favoritos, maior sequência, campeão do dia, palavras mais usadas) e desenha os cartões. `!wrapped` = o seu; `!wrapped grupo` = o do grupo (sai sozinho em 31/12 às 18h30). Vale só pro que está no histórico de mensagens (desde o início do registro) |
 | `wordcloud.js` | Conta as palavras do dia pra **nuvem de palavras** do painel (ignora links, menções, comandos, risadas e palavras comuns) |
 | `premiereCard.js` | Desenha o **cartão da estreia do GTA VI** (Vice City, "VI" neon, grade) |
 | `weeklyCard.js` | Desenha o **cartão do resumo semanal** (SVG → PNG), no estilo escuro do cartão de aniversário |
