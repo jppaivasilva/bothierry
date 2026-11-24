@@ -34,3 +34,4 @@ group_photo_backup.json
 group_photo_backups/
 openai_usage.jsonl
 news_sent.json
+backups/
