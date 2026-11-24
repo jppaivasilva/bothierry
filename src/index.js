@@ -44,6 +44,7 @@ import { renderBirthdayCard, photoToDataUri } from './birthdayCard.js';
 import { renderWeeklyCard } from './weeklyCard.js';
 import { renderPremiereCard } from './premiereCard.js';
 import { setPairingQr, clearPairingQr, getPairingQr } from './pairingQr.js';
+import { trackOpenAIUsage } from './usage.js';
 import { THANKS_TARGET_NAME, THANKS_INTERVAL_MS, isThanksToTarget, buildThanksText, pickThanksCount, ThanksStreak } from './thanks.js';
 import { loadBackups, saveBackup, setBackupUrlKey, readBackupBuffer, removeBackup } from './groupPhotoBackup.js';
 import { renderWordCloudCard } from './wordcloudCard.js';
@@ -230,7 +231,7 @@ async function commandMenu({ sock, groupJid }) {
 let openaiClient = null;
 function getOpenAIClient() {
   if (!process.env.OPENAI_API_KEY) return null;
-  if (!openaiClient) openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  if (!openaiClient) openaiClient = trackOpenAIUsage(new OpenAI({ apiKey: process.env.OPENAI_API_KEY }));
   return openaiClient;
 }
 

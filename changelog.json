@@ -263,5 +263,10 @@
   "pr": 53,
   "titulo": "Resposta a mensagens do bot",
   "resumo": "Quem responde a uma mensagem do bot (ex.: o aviso \"já bateu X mensagens\") recebe uma resposta que entende o contexto; se a resposta for um xingamento, o bot devolve \"teu cu\" (sem contar para a expulsão)."
+ },
+ {
+  "pr": 54,
+  "titulo": "Aba Consumo (OpenAI)",
+  "resumo": "Aba só do root com o consumo estimado da OpenAI: custo hoje / 7 dias / 30 dias / total, custo por dia, e por funcionalidade e por modelo. Cada chamada do bot passa a ser registrada (tokens e custo estimado)."
  }
 ]
