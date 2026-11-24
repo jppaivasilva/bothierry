@@ -2863,9 +2863,13 @@ export function startDashboardServer(
     }
   });
 
-  server.listen(port, () => {
-    console.log(`📊 Painel de monitoramento em http://localhost:${port}`);
-  });
+  // DASHBOARD_HOST=127.0.0.1 faz o painel responder SO pra maquina local (o tunel do Cloudflare
+  // e quem expoe o painel na internet, com HTTPS) — fecha o acesso direto por http://IP:porta.
+  // Sem a variavel, escuta em todas as interfaces, como sempre foi.
+  const host = process.env.DASHBOARD_HOST || undefined;
+  const onListening = () => console.log(`📊 Painel de monitoramento em http://${host || 'localhost'}:${port}${host ? ' (so local)' : ''}`);
+  if (host) server.listen(port, host, onListening);
+  else server.listen(port, onListening);
 
   return server;
 }
