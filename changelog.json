@@ -313,5 +313,10 @@
   "pr": 63,
   "titulo": "Fim da rolagem lateral no celular",
   "resumo": "A barra de abas passa a rolar sozinha (e mantém a aba escolhida à vista) e a grade dos gráficos deixa de alargar a página; nenhuma aba estoura a largura da tela."
+ },
+ {
+  "pr": 64,
+  "titulo": "Teste automático no GitHub",
+  "resumo": "Todo PR passa por um lint (variável não definida, chave repetida…) e por testes automáticos antes de ir pro ar. O lint já achou e corrigiu um erro real na checagem do iPhone, introduzido no PR #53."
  }
 ]
