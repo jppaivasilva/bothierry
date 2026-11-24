@@ -187,6 +187,7 @@ Tudo em `src/` (JavaScript, módulos ES):
 | `thanks.js` | "Obrigado @Nicholas": 3 agradecimentos seguidos ao Nicholas → o bot manda de 8 a 12 mensagens "Obrigado @Nicholas", uma a cada 2 s, marcando ele (espera 10 min antes de repetir) |
 | `usage.js` | Registra cada chamada à OpenAI (tokens + custo **estimado** pela tabela de preços do arquivo) em `openai_usage.jsonl` (só na VM) e resume pra aba **Consumo**; a funcionalidade vem do nome da função que chamou |
 | `versions.js` | Histórico de versões da aba **Versões** (só root): lê os PRs mergeados do git da VM e junta com o texto em português de `changelog.json` |
+| `favicon.js` | Favicon do painel: a foto do bot recortada em círculo, gerada em 32/48/180 px (rotas públicas `/favicon.ico`, `/favicon-32.png`, `/apple-touch-icon.png`) |
 | `wordcloud.js` | Conta as palavras do dia pra **nuvem de palavras** do painel (ignora links, menções, comandos, risadas e palavras comuns) |
 | `premiereCard.js` | Desenha o **cartão da estreia do GTA VI** (Vice City, "VI" neon, grade) |
 | `weeklyCard.js` | Desenha o **cartão do resumo semanal** (SVG → PNG), no estilo escuro do cartão de aniversário |

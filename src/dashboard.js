@@ -15,6 +15,7 @@ import { buildWordCloud } from './wordcloud.js';
 import { qrToSvg } from './pairingQr.js';
 import { getVersionHistory } from './versions.js';
 import { getUsageSummary } from './usage.js';
+import { getFavicon, FAVICON_TAGS } from './favicon.js';
 import { getAvatarPath } from './avatars.js';
 import { loadEvents, addEvent, deleteEvent, eventTitleExists, addAttendee, addAbsentee } from './events.js';
 
@@ -253,6 +254,7 @@ const DASHBOARD_HTML = `<!doctype html>
 <head>
 <meta charset="utf-8" />
 <title>Bothierry Comichosas</title>
+${FAVICON_TAGS}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script><style>
   :root {
     color-scheme: light;
@@ -2095,6 +2097,7 @@ function renderLoginPage(hasError) {
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Entrar — Bothierry</title>
+${FAVICON_TAGS}
 <style>
   :root {
     color-scheme: light;
@@ -2419,6 +2422,20 @@ export function startDashboardServer(
   const server = http.createServer((req, res) => {
     const ip = req.socket.remoteAddress || 'unknown';
     const urlObj = new URL(req.url, 'http://localhost');
+
+    // Favicon: publico (a pagina de login tambem usa) e antes de qualquer checagem de login.
+    if (req.method === 'GET' && /^\/(favicon\.ico|favicon-32\.png|apple-touch-icon\.png)$/.test(urlObj.pathname)) {
+      getFavicon(urlObj.pathname)
+        .then((png) => {
+          res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' });
+          res.end(png);
+        })
+        .catch(() => {
+          res.writeHead(404);
+          res.end();
+        });
+      return;
+    }
 
     if (urlObj.pathname === '/login' && req.method === 'GET') {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
