@@ -323,5 +323,10 @@
   "pr": 65,
   "titulo": "Aba Perfis",
   "resumo": "A página de cada membro no painel: números do ano e de sempre, histórico dos últimos 60 dias, mensagens por hora, palavras favoritas e o cartão do Bothierry Wrapped (com download)."
+ },
+ {
+  "pr": 66,
+  "titulo": "index.js dividido em módulos",
+  "resumo": "O index.js (2.780 linhas) virou uma entrada de 30 linhas e 16 módulos em src/bot/ (comandos, aniversários, mensagens do dia, eleição, áudios, conexão, tratador de mensagens, tarefas agendadas…). O código foi movido sem reescrever; nada muda para o grupo."
  }
 ]
