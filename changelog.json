@@ -288,5 +288,10 @@
   "pr": 58,
   "titulo": "Backup noturno dos dados",
   "resumo": "Todo dia às 03h40 o bot compacta os dados (mensagens, aniversários, eventos, áudios, fotos…) em backups/ e guarda os 7 últimos; com BACKUP_RCLONE_REMOTE no .env, também copia pra fora da VM. Segredos ficam de fora."
+ },
+ {
+  "pr": 59,
+  "titulo": "Trava de gasto diário da IA",
+  "resumo": "Se o gasto estimado de IA do dia passar de US$ 1 (muda com AI_DAILY_BUDGET_USD; 0 desliga), as chamadas de IA pausam até amanhã, com aviso no log/painel e uma barra na aba Consumo. O resto do bot segue normal."
  }
 ]

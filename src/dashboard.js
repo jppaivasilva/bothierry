@@ -834,6 +834,7 @@ ${FAVICON_TAGS}
 
   <div id="tab-usage" class="tab-panel">
   <div class="sub" id="usageSub">Consumo da OpenAI pelo bot · só o root vê esta aba</div>
+  <div id="usageBudget" class="chart-box" style="display:none; margin-bottom:20px;"></div>
   <div class="cards" id="usageCards"></div>
   <div class="chart-box" style="margin-bottom:20px;">
     <div class="title">Custo por dia (últimos 30 dias, US$)</div>
@@ -1660,6 +1661,17 @@ async function loadUsage() {
     const u = await fetch('/api/admin/usage').then((r) => r.json());
     if (!u.totals) { document.getElementById('usageSub').textContent = 'Não consegui carregar o consumo.'; return; }
     document.getElementById('usageSub').textContent = u.since ? 'Consumo da OpenAI pelo bot, registrado desde ' + u.since.split('-').reverse().join('/') + ' · só o root vê esta aba' : 'Ainda sem chamadas registradas — o consumo aparece aqui conforme o bot usar a OpenAI.';
+    const b = u.budget;
+    const box = document.getElementById('usageBudget');
+    if (b && b.limitUsd > 0) {
+      const pct = Math.min(100, Math.round((b.usedUsd / b.limitUsd) * 100));
+      box.style.display = 'block';
+      box.innerHTML = '<div class="title">' + (b.exceeded ? '⛔ Limite diário de IA atingido — a IA está pausada até amanhã' : 'Limite diário de IA') + '</div>' +
+        '<div class="ver-desc">' + fmtUsd(b.usedUsd) + ' de ' + fmtUsd(b.limitUsd) + ' hoje (' + pct + '%) · muda com AI_DAILY_BUDGET_USD no .env da VM (0 desliga)</div>' +
+        '<div style="height:10px; border-radius:6px; background:rgba(0,0,0,.08); margin-top:10px; overflow:hidden;"><div style="height:100%; width:' + pct + '%; background:' + (b.exceeded ? 'var(--accent-red)' : pct > 70 ? 'var(--accent-orange)' : 'var(--accent-green)') + ';"></div></div>';
+    } else {
+      box.style.display = 'none';
+    }
     const card = (label, t, color) => '<div class="card"><div class="label"><span class="dot" style="--dot-color:' + color + '"></span>' + label + '</div><div class="value" style="font-size:26px;">' + fmtUsd(t.costUsd) + '</div><div class="label">' + t.calls + ' chamadas · ' + fmtTok(t.inTok + t.outTok) + ' tokens</div></div>';
     document.getElementById('usageCards').innerHTML = card('Hoje', u.totals.today, 'var(--accent-green)') + card('7 dias', u.totals.week, 'var(--accent-blue)') + card('30 dias', u.totals.month, 'var(--accent-orange)') + card('Total', u.totals.all, 'var(--accent-purple)');
     const max = Math.max(0.0001, ...u.daily.map((d) => d.costUsd));

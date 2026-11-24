@@ -22,6 +22,11 @@ const IMAGE_PRICES = {
 };
 const WHISPER_USD_PER_MINUTE = 0.006;
 
+// Trava de gasto: passou do limite do dia (US$, estimado), as chamadas de IA
+// sao recusadas ate a virada do dia (o bot segue funcionando sem IA). Mude o
+// limite com AI_DAILY_BUDGET_USD no .env; 0 desliga a trava.
+export const DAILY_BUDGET_USD = process.env.AI_DAILY_BUDGET_USD !== undefined && process.env.AI_DAILY_BUDGET_USD !== '' ? Number(process.env.AI_DAILY_BUDGET_USD) : 1;
+
 // Funcao que fez a chamada (lida da pilha de execucao) -> nome mostrado no painel.
 const FEATURES = {
   answerDataQuestion: 'Perguntas ao bot',
@@ -56,10 +61,36 @@ function costOf(model, usage) {
   return null; // sem preco cadastrado
 }
 
+// Gasto de hoje, guardado em memoria (lido do arquivo na primeira vez do dia).
+const today = { key: null, cost: 0, warned: false };
+function syncToday() {
+  const key = brDate(Math.floor(Date.now() / 1000));
+  if (today.key !== key) {
+    today.key = key;
+    today.warned = false;
+    today.cost = readEntries().filter((e) => brDate(e.ts) === key).reduce((t, e) => t + (e.costUsd || 0), 0);
+  }
+}
+
+/** Limite diario de IA atingido? (so olha o gasto estimado de hoje) */
+export function isBudgetExceeded() {
+  if (!(DAILY_BUDGET_USD > 0)) return false;
+  syncToday();
+  return today.cost >= DAILY_BUDGET_USD;
+}
+
+/** { limitUsd, usedUsd, exceeded } de hoje — pro painel. */
+export function getBudgetStatus() {
+  syncToday();
+  return { limitUsd: DAILY_BUDGET_USD, usedUsd: today.cost, exceeded: DAILY_BUDGET_USD > 0 && today.cost >= DAILY_BUDGET_USD };
+}
+
 function record(feature, model, usage) {
   try {
     const entry = { ts: Math.floor(Date.now() / 1000), feature, model, ...usage, costUsd: costOf(model, usage) };
     fs.appendFileSync(USAGE_FILE, JSON.stringify(entry) + '\n');
+    syncToday();
+    today.cost += entry.costUsd || 0;
   } catch (err) {
     console.error('Erro ao registrar consumo da OpenAI:', err);
   }
@@ -70,6 +101,15 @@ function wrap(owner, method, toUsage) {
   const original = owner[method].bind(owner);
   owner[method] = async (...args) => {
     const feature = featureFromStack(); // le a pilha ANTES do await, quando a funcao chamadora ainda esta nela
+    if (isBudgetExceeded()) {
+      if (!today.warned) {
+        today.warned = true;
+        console.error(`[IA] Limite diario de gasto atingido (US$ ${DAILY_BUDGET_USD.toFixed(2)}): chamadas de IA pausadas ate amanha. Ajuste AI_DAILY_BUDGET_USD no .env se quiser.`);
+      }
+      const err = new Error('limite diario de gasto da IA atingido');
+      err.code = 'AI_BUDGET_EXCEEDED';
+      throw err;
+    }
     const result = await original(...args);
     try {
       const u = toUsage(result, args[0]);
@@ -152,6 +192,7 @@ export function getUsageSummary(now = new Date()) {
   }
 
   return {
+    budget: getBudgetStatus(),
     since: entries[0] ? brDate(entries[0].ts) : null,
     totals: {
       today: sum(entries.filter((e) => brDate(e.ts) === today)),
