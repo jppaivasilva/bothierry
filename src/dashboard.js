@@ -326,6 +326,10 @@ ${FAVICON_TAGS}
     -webkit-backdrop-filter: blur(32px) saturate(180%);
   }
   .topbar .brand { margin-bottom: 0; }
+  /* Muitas abas (ate 10 pro root): a barra rola sozinha em vez de alargar a pagina inteira no celular. */
+  .topbar .tabs { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .topbar .tabs::-webkit-scrollbar { display: none; }
+  .topbar .tab-btn { flex: none; white-space: nowrap; }
   .header-status { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
   .live-pill { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--text-secondary); }
   .logout-link { font-size: 12px; font-weight: 600; color: var(--text-secondary); text-decoration: none; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--glass-border); transition: color .15s var(--ease-out), background .15s var(--ease-out); }
@@ -418,8 +422,9 @@ ${FAVICON_TAGS}
   .cards .card:first-child .dot { animation: pulse-dot 2.2s ease-out infinite; }
   .status-offline { color: var(--accent-red); }
   .status-starting { color: var(--accent-orange); }
-  .charts { display: grid; grid-template-columns: 1fr; gap: 24px; margin-bottom: 24px; }
-  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px; }
+  .charts { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; margin-bottom: 24px; }
+  .chart-box { min-width: 0; }
+  .grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; margin-bottom: 24px; }
   @media (max-width: 800px) { .grid2 { grid-template-columns: 1fr; } }
   .empty-row td { color: var(--text-secondary); font-style: italic; }
   #heatmap table { border-collapse: separate; border-spacing: 3px; font-size: 11px; }
@@ -889,6 +894,7 @@ document.querySelectorAll('.tabs:not(#rankingToggle) > .tab-btn').forEach((btn) 
     document.querySelectorAll('.tabs:not(#rankingToggle) > .tab-btn').forEach((b) => b.classList.remove('active'));
     document.querySelectorAll('.tab-panel').forEach((p) => p.classList.remove('active'));
     btn.classList.add('active');
+    btn.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' }); // mantem a aba escolhida a vista na barra que rola
     document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
     // Chart.js mede o canvas no momento em que ele e criado — se a aba
     // "Atividade" nunca tiver sido aberta antes, o canvas do trendChart
