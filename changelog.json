@@ -258,5 +258,10 @@
   "pr": 52,
   "titulo": "Bot entende o contexto da conversa",
   "resumo": "Quando falam com o bot (marcando ou respondendo a uma mensagem dele), ele recebe as últimas 25 mensagens do grupo (3 h) e a mensagem respondida, pra entender \"ele\", \"isso\", \"o que quis dizer\". Responder a uma mensagem dele, sem marcar, também vale."
+ },
+ {
+  "pr": 53,
+  "titulo": "Resposta a mensagens do bot",
+  "resumo": "Quem responde a uma mensagem do bot (ex.: o aviso \"já bateu X mensagens\") recebe uma resposta que entende o contexto; se a resposta for um xingamento, o bot devolve \"teu cu\" (sem contar para a expulsão)."
  }
 ]

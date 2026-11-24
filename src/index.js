@@ -265,7 +265,7 @@ async function isIphoneDepreciative(text) {
             'Primeiro, explique em uma linha curta o sentido real da frase (ela elogia ou critica o iPhone de verdade?). ' +
             'Depois, na ultima linha, responda EXATAMENTE no formato "RESPOSTA: SIM" ou "RESPOSTA: NAO".',
         },
-        { role: 'user', content: text },
+        { role: 'user', content: quotedText ? `Mensagem anterior do bot, a que a pessoa esta respondendo: "${quotedText}"\n\nMensagem da pessoa: ${text}` : text },
       ],
       max_tokens: 100,
     });
@@ -298,7 +298,7 @@ function saveInsultCounts(counts) {
 // Pede pra IA classificar se uma mensagem insulta/ofende o bot de verdade
 // (xingamento, deboche agressivo, etc) — nao conta zoeira leve ou perguntas
 // normais. Sem chave da OpenAI configurada, nao arrisca — retorna false.
-async function isInsultToBot(text) {
+async function isInsultToBot(text, quotedText = null) {
   const client = getOpenAIClient();
   if (!client) return false;
 
@@ -2598,23 +2598,33 @@ async function startBot() {
         const mentionedJids = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
         const botIdentifiers = [sock.user?.id, sock.user?.lid].filter(Boolean).map(jidNormalizedUser);
         const isBotMentioned = mentionedJids.some((jid) => botIdentifiers.includes(jidNormalizedUser(jid)));
-        // Resposta a uma mensagem do bot (sem marcar ele) tambem conta como falar com ele — mas so
-        // se tiver conteudo de verdade (nao "kkk"/"ok"), pra nao responder qualquer reacao a um cartao.
+        // Resposta a uma mensagem do bot (sem marcar ele) tambem conta como falar com ele. Risada
+        // ("kkk", "haha") e mensagens de 1-2 letras ficam de fora; xingamento e checado a partir de 3
+        // letras, mas so responde de verdade (IA) com 8+ letras — pra nao responder todo "bom dia" a um cartao.
         const quotedInfo = msg.message?.extendedTextMessage?.contextInfo;
+        const replyLetterText = text.replace(/[^\p{L}]/gu, '');
+        const replyLetters = replyLetterText.length;
         const isReplyToBot =
           !!quotedInfo?.quotedMessage && !!quotedInfo.participant && botIdentifiers.includes(jidNormalizedUser(quotedInfo.participant)) &&
-          text.replace(/[^\p{L}]/gu, '').length >= 8;
+          replyLetters >= 3 && !/^(?:k+|(?:ha)+h?|(?:rs)+|(?:he)+h?)$/i.test(replyLetterText);
         const addressedToBot = isBotMentioned || (isReplyToBot && !isOnBotChatCooldown(senderJid));
         if (mentionedJids.length > 0) {
           debugLog(`[debug] mencoes na mensagem: ${JSON.stringify(mentionedJids)} | identidades do bot: ${JSON.stringify(botIdentifiers)} | bot mencionado: ${isBotMentioned}`);
         }
 
         if (addressedToBot) {
-          const insulted = await isInsultToBot(text);
+          const quotedMessage = getQuotedMessage(msg, groupJid, botIdentifiers);
+          const insulted = await isInsultToBot(text, isReplyToBot ? quotedMessage?.text : null);
           if (insulted) {
             debugLog(`[debug] insulto ao bot detectado de ${senderName}`);
             try {
-              await handleBotInsult({ sock, groupJid, senderJid, senderName });
+              if (isBotMentioned) {
+                await handleBotInsult({ sock, groupJid, senderJid, senderName });
+              } else {
+                // Xingou respondendo a uma mensagem do bot (sem marcar): so devolve a ofensa, sem contar pra expulsao.
+                const sent = await sock.sendMessage(groupJid, { text: 'teu cu' }, { quoted: msg });
+                if (sent?.key?.id) sentByBot.add(sent.key.id);
+              }
             } catch (err) {
               console.error('Erro ao processar insulto ao bot:', err);
             }
@@ -2624,12 +2634,12 @@ async function startBot() {
               debugLog('[debug] bot mencionado mas OPENAI_API_KEY nao configurada, ignorando pergunta.');
             } else {
               const question = text.replace(/@\d+/g, '').trim();
-              if (question) {
+              if (question && (isBotMentioned || replyLetters >= 8)) {
                 debugLog(`[debug] pergunta de dados detectada: "${question}"`);
                 try {
                   const answer = await answerDataQuestion(client, groupJid, question, {
                     context: getRecentConversation(groupJid, text),
-                    quoted: getQuotedMessage(msg, groupJid, botIdentifiers),
+                    quoted: quotedMessage,
                   });
                   const sent = await sock.sendMessage(groupJid, { text: answer });
                   if (sent?.key?.id) sentByBot.add(sent.key.id);
