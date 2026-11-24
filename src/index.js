@@ -45,6 +45,7 @@ import { renderWeeklyCard } from './weeklyCard.js';
 import { renderPremiereCard } from './premiereCard.js';
 import { setPairingQr, clearPairingQr, getPairingQr } from './pairingQr.js';
 import { trackOpenAIUsage } from './usage.js';
+import { TOPICS, sendTopicNews } from './gameNews.js';
 import { THANKS_TARGET_NAME, THANKS_INTERVAL_MS, isThanksToTarget, buildThanksText, pickThanksCount, ThanksStreak } from './thanks.js';
 import { loadBackups, saveBackup, setBackupUrlKey, readBackupBuffer, removeBackup } from './groupPhotoBackup.js';
 import { renderWordCloudCard } from './wordcloudCard.js';
@@ -897,6 +898,7 @@ const commands = {
   policiafederal: commandPoliciaFederal,
   testareleicao: commandTestarEleicao,
   testarbomdia: commandTestarBomDia,
+  testarnoticias: commandTestarNoticias,
   testarestreia: commandTestarEstreia,
   testarnuvem: commandTestarNuvem,
   resumosemanal: commandResumoSemanal,
@@ -1429,6 +1431,27 @@ function getQuotedMessage(msg, groupJid, botIdentifiers) {
   const member = participant ? getMemberList(groupJid).find((m) => jidNormalizedUser(m.jid) === participant) : null;
   const author = participant && botIdentifiers.includes(participant) ? 'voce (Bothierry)' : member ? formatDisplayName(member.name) : 'alguem';
   return { author, text: quotedText.replace(/@\d+/g, '@alguem').slice(0, 500) };
+}
+
+// Noticias de games no grupo principal: 12h e 19h (cron abaixo). A IA escolhe a
+// melhor candidata dos feeds (src/gameNews.js) e o link sai com a miniatura.
+async function sendGameNews(sock, { groupJid = null } = {}) {
+  const target = groupJid || (await findMainGroupJid(sock));
+  if (!target) return null;
+  const topic = TOPICS.find((t) => t.key === 'games');
+  return sendTopicNews(sock, target, getOpenAIClient(), topic, { onSent: (sent) => sent?.key?.id && sentByBot.add(sent.key.id) });
+}
+
+// !testarnoticias — manda uma noticia de games agora, so no grupo onde foi digitado, e conta o que achou.
+async function commandTestarNoticias({ sock, groupJid }) {
+  try {
+    const result = await sendGameNews(sock, { groupJid });
+    const fontes = (result?.diagnostics || []).map((d) => (d.ok ? `${d.source}: ${d.items} itens` : `${d.source}: FALHOU (${d.error})`)).join(' | ');
+    if (!result?.sent) await sock.sendMessage(groupJid, { text: `Não mandei notícia: ${result?.reason || 'sem resultado'}.\nFontes: ${fontes}` });
+  } catch (err) {
+    console.error('Erro ao mandar noticia de games:', err);
+    await sock.sendMessage(groupJid, { text: 'Não consegui mandar a notícia agora (veja o log).' });
+  }
 }
 
 // Mensagem automatica das 18h: soma o tempo "perdido" e o ranking completo do
@@ -2245,6 +2268,15 @@ cron.schedule(
   () => {
     recordCronRun('estreia_gtavi');
     if (currentSock) checkAndSendPremiere(currentSock).catch((err) => console.error('Erro ao enviar o cartao da estreia (cron):', err));
+  },
+  CRON_OPTIONS
+);
+
+cron.schedule(
+  '0 12,19 * * *',
+  () => {
+    recordCronRun('noticias_games');
+    if (currentSock) sendGameNews(currentSock).catch((err) => console.error('Erro ao mandar noticia de games (cron):', err));
   },
   CRON_OPTIONS
 );

@@ -268,5 +268,10 @@
   "pr": 54,
   "titulo": "Aba Consumo (OpenAI)",
   "resumo": "Aba só do root com o consumo estimado da OpenAI: custo hoje / 7 dias / 30 dias / total, custo por dia, e por funcionalidade e por modelo. Cada chamada do bot passa a ser registrada (tokens e custo estimado)."
+ },
+ {
+  "pr": 55,
+  "titulo": "Notícias de games no grupo",
+  "resumo": "Duas vezes por dia (12h e 19h) o bot manda uma notícia de games em português (IGN Brasil e Canaltech), escolhida pela IA, com a miniatura do link. Não repete notícia. !testarnoticias para ver."
  }
 ]
