@@ -253,5 +253,10 @@
   "pr": 51,
   "titulo": "Aba Versões (só root)",
   "resumo": "Histórico dos PRs mergeados com o que foi implementado e qual versão está no ar."
+ },
+ {
+  "pr": 52,
+  "titulo": "Bot entende o contexto da conversa",
+  "resumo": "Quando falam com o bot (marcando ou respondendo a uma mensagem dele), ele recebe as últimas 25 mensagens do grupo (3 h) e a mensagem respondida, pra entender \"ele\", \"isso\", \"o que quis dizer\". Responder a uma mensagem dele, sem marcar, também vale."
  }
 ]

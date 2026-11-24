@@ -343,6 +343,10 @@ function buildSystemPrompt() {
     'Use essas datas prontas pra converter expressoes relativas na pergunta ("essa semana" = desde inicio desta semana ate hoje; ' +
     '"hoje" = so o dia hoje; "esse mes" = desde inicio deste mes ate hoje; "ultimos 7 dias" = desde 7 dias atras ate hoje) antes ' +
     'de chamar uma funcao. Nunca invente ou calcule uma data diferente das fornecidas aqui. ' +
+    'Se a mensagem trouxer "Conversa recente do grupo" e/ou a mensagem respondida, use isso pra entender a que a pergunta se ' +
+    'refere (pronomes como "ele"/"isso", "o que ele quis dizer?", "resume o que acabaram de falar", "concorda?") e responda ' +
+    'DIRETAMENTE, sem chamar funcao, em ate 3 frases curtas, so com base nesse contexto — sem inventar o que nao foi dito. ' +
+    'Pra perguntas de estatistica/ranking/contagem, continue usando as funcoes normalmente. ' +
     'Voce responde perguntas sobre estatisticas de mensagens de um grupo de WhatsApp, sobre o CONTEUDO das mensagens de alguem, ' +
     'e sobre quem e o dono de um apelido, em portugues do Brasil, SOMENTE usando as funcoes disponiveis (contar_top3, ' +
     'total_mensagens, ranking_periodo, listar_mensagens, quem_e). Se a pergunta pedir algo que nenhuma dessas funcoes calcula ' +
@@ -368,12 +372,23 @@ function buildSystemPrompt() {
  * (top3, total de mensagens, ranking). Fora desse escopo, a propria IA
  * responde que nao esta preparada, sem chamar nenhuma funcao.
  */
-export async function answerDataQuestion(client, groupJid, question) {
+export async function answerDataQuestion(client, groupJid, question, { context = [], quoted = null } = {}) {
   const records = getAllRecordsForGroup(groupJid);
+
+  // Contexto da conversa (so pra entender a pergunta): as ultimas mensagens do
+  // grupo e, se for uma resposta, a mensagem a que ela responde.
+  let userContent = question;
+  if (context.length > 0 || quoted) {
+    const parts = [];
+    if (context.length > 0) parts.push(`Conversa recente do grupo (da mais antiga pra mais nova):\n${context.join('\n')}`);
+    if (quoted) parts.push(`A pergunta responde a esta mensagem de ${quoted.author}: "${quoted.text}"`);
+    parts.push(`Pergunta de agora: ${question}`);
+    userContent = parts.join('\n\n');
+  }
 
   const messages = [
     { role: 'system', content: buildSystemPrompt() },
-    { role: 'user', content: question },
+    { role: 'user', content: userContent },
   ];
 
   const first = await client.chat.completions.create({
@@ -382,7 +397,7 @@ export async function answerDataQuestion(client, groupJid, question) {
     tools: TOOLS,
     tool_choice: 'auto',
     temperature: 0,
-    max_tokens: 200,
+    max_tokens: 300,
   });
 
   const choice = first.choices[0];
