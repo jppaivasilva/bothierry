@@ -40,7 +40,7 @@ if ! git diff --quiet "$OLD" "$NEW" -- package.json package-lock.json; then
 fi
 
 # Valida a sintaxe de todos os arquivos antes de reiniciar.
-for f in src/*.js scripts/*.js; do
+for f in src/*.js src/bot/*.js scripts/*.js; do
   [ -f "$f" ] || continue
   if ! node --check "$f" 2>/tmp/bothierry-deploy-check.txt; then
     log "ERRO de sintaxe em $f — voltando pro commit ${OLD:0:7}, bot NAO reiniciado:"
