@@ -175,7 +175,7 @@ Tudo em `src/` (JavaScript, módulos ES):
 | `birthdayLinks.js` | De/para aniversariante → membro do grupo (foto do cartão e da lista): ligação manual do painel, ou automática por nome/apelido (`apelidos.txt`) quando só uma pessoa bate; sugere candidatos nos demais |
 | `scheduled.js` | Mensagens agendadas pontuais (`scheduled_messages.json`) |
 | `rules.js` | Regras do grupo (`regras/*.txt`) |
-| `dataQuestions.js` | Perguntas sobre dados do grupo via `@Bothierry` + IA |
+| `dataQuestions.js` | Perguntas sobre dados do grupo via `@Bothierry` + IA. Quando falam com o bot (marcando ou **respondendo a uma mensagem dele**, com texto de verdade e no máximo 1 vez a cada 15 s por pessoa), a IA também recebe as últimas 25 mensagens do grupo (até 3 h) e a mensagem respondida, pra entender referências como "ele" ou "isso" (`BOT_CONTEXT_*` em `index.js`) |
 | `groupPhoto.js` | Foto do grupo/bot editada por IA |
 | `avatars.js` | Cache de fotos de perfil dos membros |
 | `displayNames.js` | **Nome padronizado** de cada pessoa (acento, maiúsculas, homônimos) — usado em **todo lugar**: painel, rankings do WhatsApp, `!resumo`, eventos, perguntas sobre dados e aniversários |
