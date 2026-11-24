@@ -318,5 +318,10 @@
   "pr": 64,
   "titulo": "Teste automático no GitHub",
   "resumo": "Todo PR passa por um lint (variável não definida, chave repetida…) e por testes automáticos antes de ir pro ar. O lint já achou e corrigiu um erro real na checagem do iPhone, introduzido no PR #53."
+ },
+ {
+  "pr": 65,
+  "titulo": "Aba Perfis",
+  "resumo": "A página de cada membro no painel: números do ano e de sempre, histórico dos últimos 60 dias, mensagens por hora, palavras favoritas e o cartão do Bothierry Wrapped (com download)."
  }
 ]
