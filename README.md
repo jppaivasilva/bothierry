@@ -162,7 +162,15 @@ Tudo em `src/` (JavaScript, módulos ES):
 
 | Arquivo | Responsabilidade |
 | --- | --- |
-| `index.js` | **Núcleo**: conecta no WhatsApp (Baileys), recebe mensagens, tabela de comandos, detectores automáticos, todos os crons, mensagens agendadas |
+| `index.js` | Entrada (30 linhas): liga as tarefas agendadas, o painel e a conexão. O resto vive em `src/bot/` (abaixo) |
+| `bot/shared.js` | Infraestrutura compartilhada: constantes, data/hora de Brasília, cliente OpenAI (com registro de consumo), lista de grupos, feriados, `botState.sock` |
+| `bot/connection.js` | Conexão com o WhatsApp: socket, reconexão, sessão deslogada, estado pro `/health` |
+| `bot/messageHandler.js` | O que acontece com cada mensagem recebida: link repetido/thumb, regras, marcos, comandos, perguntas ao bot, enxurrada de obrigados |
+| `bot/commands.js` | Mapa de comandos, categorias do `!menu` e o parser de `!comando` |
+| `bot/basicCommands.js` · `eventCommands.js` · `audioCommands.js` · `electionFlow.js` | Comandos por assunto (ranking/resumo/figurinha…, eventos, áudios, eleição) |
+| `bot/birthdayFlow.js` · `dailyMessages.js` · `specialMessages.js` · `avatarTheme.js` | Aniversários; mensagens do dia (bom dia, fim de expediente, resumos); mensagens especiais (nuvem, estreia, notícias, Wrapped); foto temática do bot |
+| `bot/insults.js` · `botConversation.js` | Regras com IA (insulto ao bot, iPhone) e contexto quando falam com o bot |
+| `bot/crons.js` · `bootstrap.js` | Todas as tarefas agendadas; e o que roda antes de tudo (`.env`, erros pro painel) |
 | `dashboard.js` | Servidor HTTP do painel: login/sessões, papéis (viewer/member/admin), rotas `/api/*`, página única (HTML+CSS+JS embutidos) |
 | `db.js` | Armazenamento das mensagens: grava, consulta (ranking, tendência, mapa de calor), arquiva antigas, descobre o **grupo principal** |
 | `metrics.js` | Métricas do painel: conexão, comandos mais usados, última execução de cada cron, CPU/memória/disco da VM |
