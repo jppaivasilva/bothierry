@@ -273,5 +273,10 @@
   "pr": 55,
   "titulo": "Notícias de games no grupo",
   "resumo": "Duas vezes por dia (12h e 19h) o bot manda uma notícia de games em português (IGN Brasil e Canaltech), escolhida pela IA, com a miniatura do link. Não repete notícia. !testarnoticias para ver."
+ },
+ {
+  "pr": 56,
+  "titulo": "Favicon do painel",
+  "resumo": "A foto do bot (redonda) vira o ícone da aba do navegador no painel e na tela de login; também serve de ícone ao salvar o painel na tela inicial do celular."
  }
 ]
