@@ -308,5 +308,10 @@
   "pr": 62,
   "titulo": "Painel pode escutar só localmente",
   "resumo": "DASHBOARD_HOST=127.0.0.1 no .env faz o painel responder só pela máquina (via túnel do Cloudflare, com HTTPS), fechando o acesso direto por http://IP:4321 sem criptografia."
+ },
+ {
+  "pr": 63,
+  "titulo": "Fim da rolagem lateral no celular",
+  "resumo": "A barra de abas passa a rolar sozinha (e mantém a aba escolhida à vista) e a grade dos gráficos deixa de alargar a página; nenhuma aba estoura a largura da tela."
  }
 ]
