@@ -25,7 +25,7 @@ const WHISPER_USD_PER_MINUTE = 0.006;
 // Trava de gasto: passou do limite do dia (US$, estimado), as chamadas de IA
 // sao recusadas ate a virada do dia (o bot segue funcionando sem IA). Mude o
 // limite com AI_DAILY_BUDGET_USD no .env; 0 desliga a trava.
-export const DAILY_BUDGET_USD = process.env.AI_DAILY_BUDGET_USD !== undefined && process.env.AI_DAILY_BUDGET_USD !== '' ? Number(process.env.AI_DAILY_BUDGET_USD) : 1;
+export const DAILY_BUDGET_USD = process.env.AI_DAILY_BUDGET_USD !== undefined && process.env.AI_DAILY_BUDGET_USD !== '' ? Number(process.env.AI_DAILY_BUDGET_USD) : 5;
 
 // Funcao que fez a chamada (lida da pilha de execucao) -> nome mostrado no painel.
 const FEATURES = {

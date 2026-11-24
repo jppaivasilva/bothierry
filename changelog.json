@@ -292,6 +292,11 @@
  {
   "pr": 59,
   "titulo": "Trava de gasto diário da IA",
-  "resumo": "Se o gasto estimado de IA do dia passar de US$ 1 (muda com AI_DAILY_BUDGET_USD; 0 desliga), as chamadas de IA pausam até amanhã, com aviso no log/painel e uma barra na aba Consumo. O resto do bot segue normal."
+  "resumo": "Se o gasto estimado de IA do dia passar de US$ 5 (muda com AI_DAILY_BUDGET_USD; 0 desliga), as chamadas de IA pausam até amanhã, com aviso no log/painel e uma barra na aba Consumo. O resto do bot segue normal."
+ },
+ {
+  "pr": 60,
+  "titulo": "Limite diário de IA: US$ 5",
+  "resumo": "O padrão da trava de gasto diário da IA passa de US$ 1 para US$ 5 (continua mudando com AI_DAILY_BUDGET_USD no .env)."
  }
 ]
