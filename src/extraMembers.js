@@ -7,7 +7,8 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { getMemberList, getMainGroupJid } from './db.js';
-import { normalizeName, removeLinksToJid } from './birthdayLinks.js';
+import { normalizeName, removeLinksToJid, moveLinks } from './birthdayLinks.js';
+import { moveMemberPhoto } from './birthdayPhotos.js';
 import { formatDisplayName } from './displayNames.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -64,6 +65,25 @@ export function isBot(member) {
   return botJids.includes(member.jid) || normalizeName(formatDisplayName(member.name)) === 'bothierry';
 }
 
+const displayKey = (name) => normalizeName(formatDisplayName(name));
+
+/**
+ * Pessoa adicionada na mao que depois mandou mensagem no grupo vira membro de
+ * verdade — o cadastro manual ficaria duplicado ("dois Felipe Lopes"). Quando o
+ * nome de exibicao e o mesmo, a ligacao de aniversario e a foto enviada passam
+ * pro membro real e o cadastro manual some.
+ */
+function absorbDuplicateExtras(realMembers) {
+  const byName = new Map(realMembers.map((m) => [displayKey(m.name), m]));
+  for (const extra of loadExtraMembers()) {
+    const real = byName.get(displayKey(extra.name));
+    if (!real) continue;
+    moveLinks(extra.jid, real.jid);
+    moveMemberPhoto(extra.jid, real.jid);
+    removeExtraMember(extra.jid);
+  }
+}
+
 /**
  * Membros do grupo principal (quem ja mandou mensagem) + as pessoas
  * adicionadas na mao. E a lista que o painel e os aniversarios usam.
@@ -71,6 +91,7 @@ export function isBot(member) {
 export function getMembersWithExtras() {
   const groupJid = getMainGroupJid();
   const real = (groupJid ? getMemberList(groupJid) : []).filter((m) => !isBot(m));
+  absorbDuplicateExtras(real);
   const extras = loadExtraMembers().map((e) => ({ jid: e.jid, name: e.name, total: 0, todayCount: 0, since: null, manual: true }));
   return [...real, ...extras];
 }

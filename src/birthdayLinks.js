@@ -45,6 +45,19 @@ export function setBirthdayLink(name, jid) {
   fs.writeFileSync(LINKS_FILE, JSON.stringify(links, null, 2) + '\n');
 }
 
+/** Aponta pra `to` todas as ligacoes manuais que apontavam pra `from` (ex.: pessoa adicionada na mao que depois virou membro de verdade). */
+export function moveLinks(from, to) {
+  const links = loadBirthdayLinks();
+  let changed = false;
+  for (const [key, value] of Object.entries(links)) {
+    if (value === from) {
+      links[key] = to;
+      changed = true;
+    }
+  }
+  if (changed) fs.writeFileSync(LINKS_FILE, JSON.stringify(links, null, 2) + '\n');
+}
+
 /** Remove todas as ligacoes manuais que apontam pra esse jid (ex.: pessoa manual removida). */
 export function removeLinksToJid(jid) {
   const links = loadBirthdayLinks();

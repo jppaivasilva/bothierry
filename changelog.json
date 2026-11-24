@@ -328,5 +328,10 @@
   "pr": 66,
   "titulo": "index.js dividido em módulos",
   "resumo": "O index.js (2.780 linhas) virou uma entrada de 30 linhas e 16 módulos em src/bot/ (comandos, aniversários, mensagens do dia, eleição, áudios, conexão, tratador de mensagens, tarefas agendadas…). O código foi movido sem reescrever; nada muda para o grupo."
+ },
+ {
+  "pr": 68,
+  "titulo": "Aba Aniversários + fim do nome duplicado",
+  "resumo": "Os aniversários saíram da aba Comandos e ganharam aba própria (por mês, com busca, o próximo em destaque e a ligação aniversariante → membro do admin). Pessoa adicionada na mão que depois vira membro de verdade deixa de aparecer duas vezes: a ligação e a foto passam pro membro real. Nomes iguais em Perfis ganham um sufixo pra diferenciar."
  }
 ]

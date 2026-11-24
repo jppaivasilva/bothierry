@@ -641,6 +641,7 @@ ${FAVICON_TAGS}
       <button class="tab-btn" data-tab="cloud">Nuvem</button>
       <button class="tab-btn" data-tab="members">Membros</button>
       <button class="tab-btn" data-tab="profiles">Perfis</button>
+      <button class="tab-btn" data-tab="birthdays">Aniversários</button>
       <button class="tab-btn" data-tab="menu">Comandos</button>
       <button class="tab-btn" data-tab="events">Eventos</button>
       <button class="tab-btn" data-tab="system">Sistema</button>
@@ -762,6 +763,18 @@ ${FAVICON_TAGS}
   <div id="profileBody"></div>
   </div>
 
+  <div id="tab-birthdays" class="tab-panel">
+  <div class="sub">Todos os aniversariantes cadastrados, por mês · o bot avisa às 9h no dia</div>
+  <input type="text" id="bdaySearch" class="member-search" placeholder="Buscar aniversariante..." />
+  <div id="bdayBanner"></div>
+  <div id="bdayList"></div>
+  <div class="chart-box admin-only" style="margin-top:16px;">
+    <div class="section-head">Aniversariantes</div>
+    <div class="menu-desc" style="margin:0 0 12px;">Escolha qual membro é cada aniversariante (o nome e a foto do membro saem no cartão e na lista). "Automático" usa o nome (só quando bate com uma pessoa só). Para trocar uma foto, toque nela na aba Membros.</div>
+    <div id="bdayLinks">Carregando...</div>
+  </div>
+  </div>
+
   <div id="tab-menu" class="tab-panel">
   <div class="sub">Todos os comandos do bot · mande no grupo começando com ! (ou /)</div>
   <input type="text" id="menuSearch" class="member-search" placeholder="Buscar comando..." />
@@ -848,11 +861,6 @@ ${FAVICON_TAGS}
     </div>
     <div class="log-box" id="logBox">Clique em Atualizar.</div>
   </div>
-  <div class="chart-box admin-only" style="margin-top:16px;">
-    <div class="section-head">Aniversariantes</div>
-    <div class="menu-desc" style="margin:0 0 12px;">Escolha qual membro é cada aniversariante (o nome e a foto do membro saem no cartão e na lista). "Automático" usa o nome (só quando bate com uma pessoa só). Para trocar uma foto, toque nela na aba Membros.</div>
-    <div id="bdayLinks">Carregando...</div>
-  </div>
   </div>
 
   <div id="tab-usage" class="tab-panel">
@@ -926,6 +934,7 @@ document.querySelectorAll('.tabs:not(#rankingToggle) > .tab-btn').forEach((btn) 
     if (btn.dataset.tab === 'members') loadMembers();
     if (btn.dataset.tab === 'profiles') loadProfilesList();
     if (btn.dataset.tab === 'menu') loadMenu();
+    if (btn.dataset.tab === 'birthdays') loadBirthdaysTab();
     if (btn.dataset.tab === 'events') loadEvents();
   });
 });
@@ -1687,7 +1696,12 @@ async function loadProfilesList() {
   members.forEach((m) => { if (m.photoV) avatarBust[m.jid] = m.photoV; });
   const sel = document.getElementById('profileSelect');
   sel.innerHTML = '<option value="">Escolha uma pessoa…</option>' +
-    members.slice().sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')).map((m) => '<option value="' + escapeHtml(m.jid) + '" data-name="' + escapeHtml(m.name) + '">' + escapeHtml(m.name) + '</option>').join('');
+    members.slice().sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')).map((m) => {
+      // Dois com o mesmo nome (ex.: um cadastro manual e um membro de verdade): o final do numero desempata.
+      const dup = members.filter((o) => o.name === m.name).length > 1;
+      const label = m.name + (dup ? ' (' + (m.manual ? 'manual' : '…' + m.jid.split('@')[0].slice(-4)) + ')' : '');
+      return '<option value="' + escapeHtml(m.jid) + '" data-name="' + escapeHtml(m.name) + '">' + escapeHtml(label) + '</option>';
+    }).join('');
 }
 
 function profileTiles(items) {
@@ -1798,6 +1812,57 @@ async function loadMenu() {
   renderMenu('');
 }
 
+// ---------- Aba Aniversarios ----------
+async function loadBirthdaysTab() {
+  await loadMenu();
+  renderBirthdaysTab(document.getElementById('bdaySearch').value);
+}
+
+function renderBirthdaysTab(query) {
+  const q = query.trim().toLowerCase();
+  const info = birthdayInfo(menuData.birthdays);
+  const list = info.list
+    .filter((b) => !q || b.name.toLowerCase().includes(q) || (b.display || '').toLowerCase().includes(q))
+    .sort((a, b) => a.month - b.month || a.day - b.day);
+  const pad = (n) => String(n).padStart(2, '0');
+  const whenText = (b) => (b.isToday ? 'hoje 🎉' : b.days === 1 ? 'amanhã' : 'em ' + b.days + ' dias');
+  const MONTHS = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+  let banner = '';
+  if (!q && info.next.length > 0) {
+    const today = info.next[0].isToday;
+    const first = info.next[0];
+    banner = '<div class="bday-next' + (today ? ' is-today' : '') + '" style="max-width:420px; margin-bottom:18px;"><div class="lbl">' + (today ? '🎉 Hoje é aniversário de' : '🎂 Próximo aniversário') + '</div>' +
+      '<div class="nm">' + info.next.map((b) => escapeHtml(b.display || b.name)).join(' e ') + '</div>' +
+      '<div class="dt">' + pad(first.day) + '/' + pad(first.month) + (today ? '' : ' · ' + (first.days === 1 ? 'amanhã' : 'em ' + first.days + ' dias')) + '</div></div>';
+  }
+  document.getElementById('bdayBanner').innerHTML = banner;
+  if (list.length === 0) {
+    document.getElementById('bdayList').innerHTML = '<div class="member-empty">Nenhum aniversariante encontrado.</div>';
+    return;
+  }
+  let html = '';
+  for (let month = 1; month <= 12; month++) {
+    const inMonth = list.filter((b) => b.month === month);
+    if (inMonth.length === 0) continue;
+    html += '<div class="card" style="margin-bottom:14px; max-width:620px;"><div class="menu-title">' + MONTHS[month - 1] + ' · ' + inMonth.length + '</div>' +
+      inMonth.map((b) =>
+        '<div class="menu-birthday' + (b.isToday ? ' today' : b.isNext ? ' next' : b.past ? ' past' : '') + '">' +
+        '<span class="menu-date">' + pad(b.day) + '/' + pad(b.month) + '</span>' +
+        (b.photoV
+          ? '<img class="avatar-mini" src="/birthday-photo?name=' + encodeURIComponent(b.name) + '&v=' + b.photoV + '" alt="" />'
+          : b.jid ? avatarImg(b.jid, b.member || b.name, 'avatar-mini') : '<div class="avatar-fallback avatar-unknown" title="sem membro ligado">?</div>') +
+        '<span class="bday-name">' + escapeHtml(b.display || b.name) +
+        ((b.display || b.name).toLowerCase() !== b.name.toLowerCase() ? '<small>apelido na lista: ' + escapeHtml(b.name) + '</small>' : '') + '</span>' +
+        '<span class="when">' + (b.past && !b.isNext ? '✓' : whenText(b)) + '</span></div>'
+      ).join('') + '</div>';
+  }
+  document.getElementById('bdayList').innerHTML = html;
+}
+
+document.getElementById('bdaySearch').addEventListener('input', (e) => {
+  if (menuData) renderBirthdaysTab(e.target.value);
+});
+
 // Marca cada aniversariante como ja passou (este ano) / hoje / proximo / futuro,
 // com quantos dias faltam (se ja passou, conta pro ano que vem — usado pra achar
 // o proximo mesmo em dezembro). Data de "hoje" no fuso de Brasilia.
@@ -1822,7 +1887,7 @@ function renderMenu(query) {
   menuData.categories.forEach((cat) => {
     const items = cat.commands.filter((c) => !q || c.name.includes(q) || c.description.toLowerCase().includes(q));
     // Conteudo dinamico que mora dentro do card da categoria: audios salvos
-    // no card "Áudios" e a lista de aniversariantes no card "Aniversários".
+    // no card "Áudios" (a lista de aniversariantes agora tem aba propria).
     let extra = '';
     let extraCount = 0;
     if (cat.title === 'Áudios') {
@@ -1836,37 +1901,6 @@ function renderMenu(query) {
             (a === 'repetido' ? '' : '<button class="chip-del admin-only" data-audio="' + escapeHtml(a) + '" title="Apagar">✕</button>') +
             '</span>'
           ).join('') + '</div>';
-      }
-    } else if (cat.title === 'Aniversários') {
-      const info = birthdayInfo(menuData.birthdays);
-      const filtered = info.list.filter((b) => !q || b.name.toLowerCase().includes(q) || (b.display || '').toLowerCase().includes(q));
-      extraCount = filtered.length;
-      if (filtered.length > 0) {
-        const pad = (n) => String(n).padStart(2, '0');
-        const whenText = (b) => (b.isToday ? 'hoje 🎉' : b.days === 1 ? 'amanhã' : 'em ' + b.days + ' dias');
-        let banner = '';
-        if (!q && info.next.length > 0) {
-          const today = info.next[0].isToday;
-          const names = info.next.map((b) => escapeHtml(b.display || b.name)).join(' e ');
-          const first = info.next[0];
-          banner =
-            '<div class="bday-next' + (today ? ' is-today' : '') + '"><div class="lbl">' + (today ? '🎉 Hoje é aniversário de' : '🎂 Próximo aniversário') + '</div>' +
-            '<div class="nm">' + names + '</div>' +
-            '<div class="dt">' + pad(first.day) + '/' + pad(first.month) + (today ? '' : ' · ' + (first.days === 1 ? 'amanhã' : 'em ' + first.days + ' dias')) + '</div></div>';
-        }
-        extra =
-          banner +
-          '<div class="modal-section-label" style="margin-top:14px;">Aniversariantes cadastrados</div>' +
-          filtered.map((b) =>
-            '<div class="menu-birthday' + (b.isToday ? ' today' : b.isNext ? ' next' : b.past ? ' past' : '') + '">' +
-            '<span class="menu-date">' + pad(b.day) + '/' + pad(b.month) + '</span>' +
-            (b.photoV
-              ? '<img class="avatar-mini" src="/birthday-photo?name=' + encodeURIComponent(b.name) + '&v=' + b.photoV + '" alt="" />'
-              : b.jid ? avatarImg(b.jid, b.member || b.name, 'avatar-mini') : '<div class="avatar-fallback avatar-unknown" title="sem membro ligado">?</div>') +
-            '<span class="bday-name">' + escapeHtml(b.display || b.name) +
-            ((b.display || b.name).toLowerCase() !== b.name.toLowerCase() ? '<small>apelido na lista: ' + escapeHtml(b.name) + '</small>' : '') + '</span>' +
-            '<span class="when">' + (b.past && !b.isNext ? '✓' : whenText(b)) + '</span></div>'
-          ).join('');
       }
     }
     if (items.length === 0 && extraCount === 0) return;
