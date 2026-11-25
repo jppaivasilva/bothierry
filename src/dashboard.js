@@ -868,7 +868,7 @@ ${FAVICON_TAGS}
   <div id="usageBudget" class="chart-box" style="display:none; margin-bottom:20px;"></div>
   <div class="cards" id="usageCards"></div>
   <div class="chart-box" style="margin-bottom:20px;">
-    <div class="title">Custo por dia (últimos 30 dias, US$)</div>
+    <div class="title">Custo por dia (últimos 30 dias, US$ estimado)</div>
     <div id="usageBars" style="margin-top:14px;"></div>
   </div>
   <div class="charts">
@@ -1765,17 +1765,32 @@ async function loadUsage() {
     if (b && b.limitUsd > 0) {
       const pct = Math.min(100, Math.round((b.usedUsd / b.limitUsd) * 100));
       box.style.display = 'block';
-      box.innerHTML = '<div class="title">' + (b.exceeded ? '⛔ Limite diário de IA atingido — a IA está pausada até amanhã' : 'Limite diário de IA') + '</div>' +
-        '<div class="ver-desc">' + fmtUsd(b.usedUsd) + ' de ' + fmtUsd(b.limitUsd) + ' hoje (' + pct + '%) · muda com AI_DAILY_BUDGET_USD no .env da VM (0 desliga)</div>' +
+      box.innerHTML = '<div class="title">' + (b.exceeded ? '⛔ Limite mensal de IA atingido — a IA está pausada até ' + b.resetsOn.split('-').reverse().join('/') : 'Limite mensal de IA') + '</div>' +
+        '<div class="ver-desc">' + fmtUsd(b.usedUsd) + ' de ' + fmtUsd(b.limitUsd) + ' em ' + b.period.split('-').reverse().join('/') + ' (' + pct + '%) · zera em ' + b.resetsOn.split('-').reverse().join('/') + ' · muda com AI_MONTHLY_BUDGET_USD no .env da VM (0 desliga)</div>' +
         '<div style="height:10px; border-radius:6px; background:rgba(0,0,0,.08); margin-top:10px; overflow:hidden;"><div style="height:100%; width:' + pct + '%; background:' + (b.exceeded ? 'var(--accent-red)' : pct > 70 ? 'var(--accent-orange)' : 'var(--accent-green)') + ';"></div></div>';
     } else {
       box.style.display = 'none';
     }
     const card = (label, t, color) => '<div class="card"><div class="label"><span class="dot" style="--dot-color:' + color + '"></span>' + label + '</div><div class="value" style="font-size:26px;">' + fmtUsd(t.costUsd) + '</div><div class="label">' + t.calls + ' chamadas · ' + fmtTok(t.inTok + t.outTok) + ' tokens</div></div>';
-    document.getElementById('usageCards').innerHTML = card('Hoje', u.totals.today, 'var(--accent-green)') + card('7 dias', u.totals.week, 'var(--accent-blue)') + card('30 dias', u.totals.month, 'var(--accent-orange)') + card('Total', u.totals.all, 'var(--accent-purple)');
+    document.getElementById('usageCards').innerHTML = card('Hoje', u.totals.today, 'var(--accent-green)') + card('7 dias', u.totals.week, 'var(--accent-blue)') + card('Este mês', u.totals.calendarMonth, 'var(--accent-red)') + card('30 dias', u.totals.month, 'var(--accent-orange)') + card('Total', u.totals.all, 'var(--accent-purple)');
     const max = Math.max(0.0001, ...u.daily.map((d) => d.costUsd));
-    document.getElementById('usageBars').innerHTML = '<div style="display:flex; align-items:flex-end; gap:3px; height:120px;">' +
-      u.daily.map((d) => '<div title="' + d.date.split('-').reverse().join('/') + ': ' + fmtUsd(d.costUsd) + '" style="flex:1; background:var(--accent-blue); opacity:.85; border-radius:3px 3px 0 0; height:' + Math.max(2, Math.round((d.costUsd / max) * 120)) + 'px;"></div>').join('') + '</div>';
+    const H = 140;
+    const dm = (d) => d.date.slice(8, 10) + '/' + d.date.slice(5, 7);
+    const lastIdx = u.daily.length - 1;
+    const maxCost = Math.max(...u.daily.map((d) => d.costUsd));
+    const withCost = u.daily.filter((x) => x.costUsd > 0).length;
+    document.getElementById('usageBars').innerHTML =
+      '<div class="ver-meta" style="margin:0 0 6px;">topo do gráfico = ' + fmtUsd(max) + ' · o valor aparece em cima das barras</div>' +
+      '<div style="display:flex; align-items:flex-end; gap:3px; height:' + (H + 22) + 'px; border-bottom:1px solid var(--divider); padding-top:22px;">' +
+      u.daily.map((d, i) => {
+        const h = d.costUsd > 0 ? Math.max(4, Math.round((d.costUsd / max) * H)) : 2;
+        const showVal = d.costUsd > 0 && (d.costUsd === maxCost || i === lastIdx || withCost <= 8);
+        return '<div title="' + dm(d) + ': ' + fmtUsd(d.costUsd) + '" style="flex:1; min-width:0; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; height:100%; position:relative;">' +
+          (showVal ? '<span style="position:absolute; bottom:' + (h + 2) + 'px; font-size:10px; font-weight:700; color:var(--text-primary); white-space:nowrap;">' + (d.costUsd >= 1 ? d.costUsd.toFixed(2) : d.costUsd.toFixed(3)) + '</span>' : '') +
+          '<div style="width:100%; background:' + (d.costUsd > 0 ? 'var(--accent-blue)' : 'var(--divider)') + '; border-radius:3px 3px 0 0; height:' + h + 'px;"></div></div>';
+      }).join('') + '</div>' +
+      '<div style="display:flex; gap:3px; margin-top:4px;">' +
+      u.daily.map((d, i) => '<div style="flex:1; min-width:0; text-align:center; font-size:10px; color:var(--text-secondary); white-space:nowrap; overflow:visible;">' + (i % 5 === 0 || i === lastIdx ? dm(d) : '') + '</div>').join('') + '</div>';
     document.getElementById('usageByFeature').innerHTML = usageRows(u.byFeature);
     document.getElementById('usageByModel').innerHTML = usageRows(u.byModel);
   } catch (err) {
