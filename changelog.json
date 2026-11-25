@@ -363,5 +363,10 @@
   "pr": 74,
   "titulo": "Agente pesquisa na web, lê links e traz placares",
   "resumo": "Novas ferramentas do agente: busca na web (Tavily) pra fatos recentes, leitura do texto de links que alguém mandar, e placares/jogos de futebol (football-data.org: Brasileirão, ligas europeias, Champions, Copa do Mundo). Conteúdo da web é tratado como externo e não confiável (nunca vira instrução), com teto diário de buscas. Precisam das chaves TAVILY_API_KEY e FOOTBALL_DATA_API_KEY no .env; sem elas o bot avisa que não está configurado."
+ },
+ {
+  "pr": 75,
+  "titulo": "Lembretes pelo agente",
+  "resumo": "Dá pra pedir \"@Bothierry me lembra sexta às 20h de comprar o ingresso\" ou \"daqui 2 horas\": o bot confirma quando vai avisar e, na hora, manda no grupo marcando a pessoa. Comandos !lembretes (listar) e !cancelar 12. Os lembretes sobrevivem a reinícios, entram no backup, têm limite de 10 pendentes por pessoa e 90 dias de antecedência, e os que ficaram atrasados por mais de 24h (bot fora do ar) são descartados em vez de disparar em enxurrada."
  }
 ]

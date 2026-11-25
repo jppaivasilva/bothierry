@@ -11,6 +11,7 @@ import { shouldSendMorning } from '../morning.js';
 import { sendMorningMessage, sendEndOfDayMessage, sendWeeklyRanking, sendWeeklySummary, sendScheduledMessages } from './dailyMessages.js';
 import { updateGroupPhotoWithNews, sendElectionUpdate } from './electionFlow.js';
 import { checkAndSendPremiere, sendGameNews, sendWrappedGroup } from './specialMessages.js';
+import { sendDueReminders } from './reminderFlow.js';
 import { runBackup } from '../backup.js';
 import { syncAvatars } from '../avatars.js';
 
@@ -186,6 +187,15 @@ cron.schedule(
   '* * * * *',
   () => {
     if (botState.sock) sendScheduledMessages(botState.sock).catch((err) => console.error('Erro ao enviar mensagens agendadas (cron):', err));
+  },
+  CRON_OPTIONS
+);
+
+// Lembretes vencidos (reminders.json): confere a cada minuto.
+cron.schedule(
+  '* * * * *',
+  () => {
+    if (botState.sock) sendDueReminders(botState.sock).catch((err) => console.error('Erro ao enviar lembretes (cron):', err));
   },
   CRON_OPTIONS
 );

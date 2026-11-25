@@ -8,6 +8,7 @@ import { commandTestarEleicao, commandTestarFotoPresidente, commandTestarResulta
 import { commandTestarBomDia, commandResumoSemanal } from './dailyMessages.js';
 import { commandAudios, commandSalvarAudio } from './audioCommands.js';
 import { commandMemoria, commandEsquecer } from './memoryCommands.js';
+import { commandLembretes, commandCancelarLembrete } from './reminderFlow.js';
 
 // Reconhece tanto "!comando" quanto "/comando" como prefixo de comando.
 export function parseCommand(text) {
@@ -63,6 +64,8 @@ export const COMMAND_CATEGORIES = [
       { name: 'fotogrupo', description: 'responda a uma foto com !fotogrupo pra trocar a foto do grupo por ela' },
       { name: 'megasena', description: 'lista os organizadores da Mega da Virada de cada ano' },
       { name: 'policiafederal', description: 'nota pública de esclarecimento, pra qualquer eventualidade' },
+      { name: 'lembretes', description: 'lista seus lembretes (pra criar: "@Bothierry me lembra sexta às 20h de...")' },
+      { name: 'cancelar', description: 'cancela um lembrete — !cancelar 12' },
       { name: 'memoria', description: 'mostra o que eu lembro de você e do grupo' },
       { name: 'esquecer', description: 'apaga uma coisa que anotei de você — !esquecer 12 ou !esquecer tudo' },
       { name: 'otario', description: 'responda a uma mensagem com !otario pra marcar quem mandou ela' },
@@ -112,6 +115,8 @@ export const commands = {
   salvaraudio: commandSalvarAudio,
   regras: commandRegras,
   regulamento: commandRegulamento,
+  lembretes: commandLembretes,
+  cancelar: commandCancelarLembrete,
   memoria: commandMemoria,
   esquecer: commandEsquecer,
 };
