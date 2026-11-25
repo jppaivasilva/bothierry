@@ -54,7 +54,7 @@ const WEATHER_CODE_MAP = {
   99: { emoji: '⛈️', desc: 'trovoada forte com granizo' },
 };
 
-function describeWeatherCode(code) {
+export function describeWeatherCode(code) {
   return WEATHER_CODE_MAP[code] || { emoji: '🌡️', desc: 'tempo variável' };
 }
 

@@ -197,3 +197,23 @@ export async function sendTopicNews(sock, groupJid, client, topic, { onSent } = 
   }
   return { sent: false, diagnostics, reason: 'nenhuma das melhores candidatas tinha imagem pra miniatura' };
 }
+
+/** As noticias mais recentes de games (sem filtrar o que ja foi mandado) — usado pelas respostas do bot. */
+export async function getRecentGameNews(limit = 5) {
+  const topic = TOPICS[0];
+  const all = [];
+  for (const source of topic.sources) {
+    try {
+      all.push(...parseFeed(await fetchText(source.url), source));
+    } catch {
+      // fonte fora do ar: segue com as outras
+    }
+  }
+  const picked = [];
+  for (const item of all.sort((a, b) => b.date - a.date)) {
+    if (picked.some((p) => similarTitle(p.title, item.title))) continue;
+    picked.push(item);
+    if (picked.length >= limit) break;
+  }
+  return picked;
+}

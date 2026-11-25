@@ -1,4 +1,5 @@
 import { PERSONA } from './persona.js';
+import { LIVE_TOOLS, LIVE_IMPLS } from './liveData.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -292,6 +293,7 @@ const TOOLS = [
       },
     },
   },
+  ...LIVE_TOOLS,
 ];
 
 const TOOL_IMPLS = {
@@ -300,6 +302,8 @@ const TOOL_IMPLS = {
   ranking_periodo: rankingPeriodo,
   listar_mensagens: listarMensagens,
   quem_e: quemE,
+  // dados ao vivo (cotacao, tempo, noticias): nao dependem dos registros do grupo
+  ...Object.fromEntries(Object.entries(LIVE_IMPLS).map(([name, fn]) => [name, (_records, args) => fn(args)])),
 };
 
 // Datas de referencia (YYYY-MM-DD, fuso de Brasilia) calculadas em JS —
@@ -349,12 +353,22 @@ function buildSystemPrompt() {
     'refere (pronomes como "ele"/"isso", "o que ele quis dizer?", "resume o que acabaram de falar", "concorda?") e responda ' +
     'DIRETAMENTE, sem chamar funcao, em ate 3 frases curtas, so com base nesse contexto — sem inventar o que nao foi dito. ' +
     'Pra perguntas de estatistica/ranking/contagem, continue usando as funcoes normalmente. ' +
-    'Voce responde perguntas sobre estatisticas de mensagens de um grupo de WhatsApp, sobre o CONTEUDO das mensagens de alguem, ' +
-    'e sobre quem e o dono de um apelido, em portugues do Brasil, SOMENTE usando as funcoes disponiveis (contar_top3, ' +
-    'total_mensagens, ranking_periodo, listar_mensagens, quem_e). Se a pergunta pedir algo que nenhuma dessas funcoes calcula ' +
-    '(ex: sentimento/analise subjetiva do conteudo, resumo, previsao, qualquer coisa fora de contagem/ranking/listagem de ' +
-    'mensagens ou identificar apelido), responda diretamente (sem chamar funcao), em primeira pessoa e com bom humor, dizendo que essa ' +
-    'voce ainda nao sabe responder. ' +
+    'Voce conversa livremente com o grupo, em portugues do Brasil, sobre qualquer assunto (opiniao, explicacao, ideia, ' +
+    'piada, conselho, curiosidade, conhecimento geral): responda direto, sem chamar funcao, no seu jeito. ' +
+    'Pra estatisticas do grupo, use SOMENTE as funcoes de dados do grupo (contar_top3, total_mensagens, ranking_periodo, ' +
+    'listar_mensagens, quem_e). ' +
+    'DADOS AO VIVO — regra de ouro: cotacoes (dolar, euro, bitcoin, bolsa, acoes), previsao do tempo, resultados de futebol ' +
+    'e noticias mudam toda hora e voce NAO sabe esses valores de cabeca. Sempre que a pergunta tocar nisso, chame a ' +
+    'funcao certa (cotacao, previsao_tempo, noticias) e responda SO com o que ela devolveu, citando o horario ' +
+    'quando houver (ex: "o dolar ta R$ 5,43, cotacao das 14:05"). NUNCA invente numero, placar ou manchete. Se a funcao ' +
+    'devolver erro ou vazio, diga com naturalidade que nao conseguiu buscar agora e sugira tentar de novo daqui a pouco. ' +
+    'Voce NAO adivinha o futuro: previsao de bolsa, dolar, bitcoin, de quem vai ganhar um jogo ou de loteria nao existe — ' +
+    'diga isso com bom humor, mas ofereca o que sabe de verdade (o valor de agora, a variacao do dia, o historico recente ' +
+    'das noticias). So a previsao do TEMPO e real, vinda da funcao previsao_tempo. ' +
+    'Pra coisas que voce nao tem como saber (informacao muito recente que nenhuma funcao cobre, vida pessoal de alguem que ' +
+    'nao esta nas mensagens), admita que nao sabe em vez de chutar. ' +
+    'Resultados e placares de futebol: voce ainda NAO tem uma fonte confiavel pra isso, entao diga com bom humor que ainda nao ' +
+    'consegue consultar placares — nunca chute resultado. ' +
     'Quando a pergunta for "quem e o/a <apelido>", chame quem_e e responda so com o PRIMEIRO NOME da pessoa (o campo ' +
     'primeiro_nome do resultado), numa frase curta — nao repita o apelido nem de nomes completos. Se quem_e nao encontrar o ' +
     'apelido, diga que nao tem esse apelido cadastrado. ' +
@@ -364,7 +378,7 @@ function buildSystemPrompt() {
     'lista seja longa; liste o array inteiro que a funcao devolveu. Se truncado for true, avise no final que so as mais ' +
     'recentes foram listadas (ja foi a propria funcao que cortou, nao corte de novo por cima). ' +
     'Pra qualquer outra pergunta (contagens/rankings), responda em 1-3 frases curtas e diretas, em portugues, com os numeros ' +
-    'relevantes — sem inventar dados que a funcao nao retornou.'
+    'relevantes — sem inventar dados que a funcao nao retornou. Respostas curtas (ate umas 4 frases), a nao ser que peçam detalhe.'
   );
 }
 
@@ -398,15 +412,15 @@ export async function answerDataQuestion(client, groupJid, question, { context =
     messages,
     tools: TOOLS,
     tool_choice: 'auto',
-    temperature: 0,
-    max_tokens: 300,
+    temperature: 0.4,
+    max_tokens: 500,
   });
 
   const choice = first.choices[0];
   const toolCalls = choice.message.tool_calls;
 
   if (!toolCalls || toolCalls.length === 0) {
-    return choice.message.content?.trim() || 'Ih, essa eu ainda não sei responder 😅 Por enquanto eu entendo de contagem, ranking, o que cada um falou e o que rolou na conversa.';
+    return choice.message.content?.trim() || 'Hmm, travei aqui e não consegui pensar numa resposta 😅 pergunta de novo?';
   }
 
   messages.push(choice.message);
@@ -415,7 +429,7 @@ export async function answerDataQuestion(client, groupJid, question, { context =
     let result;
     try {
       const args = JSON.parse(call.function.arguments || '{}');
-      result = impl ? impl(records, args) : { erro: 'funcao desconhecida' };
+      result = impl ? await impl(records, args) : { erro: 'funcao desconhecida' };
     } catch (err) {
       result = { erro: String(err) };
     }
@@ -425,7 +439,7 @@ export async function answerDataQuestion(client, groupJid, question, { context =
   const second = await client.chat.completions.create({
     model: CHAT_MODEL,
     messages,
-    temperature: 0,
+    temperature: 0.3,
     // listar_mensagens pode trazer ate 60 mensagens pra IA reproduzir —
     // precisa de bem mais espaco que uma resposta curta de 1-3 frases.
     max_tokens: 3000,
