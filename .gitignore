@@ -36,3 +36,4 @@ openai_usage.jsonl
 news_sent.json
 backups/
 agent_traces.jsonl
+agent_memory.json
