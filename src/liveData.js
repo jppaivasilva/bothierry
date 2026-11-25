@@ -19,8 +19,8 @@ async function cached(key, ttlMs, loader) {
   return value;
 }
 
-async function fetchJson(url, timeoutMs = 9000) {
-  const res = await fetch(url, { headers: { 'User-Agent': UA, Accept: 'application/json', 'Accept-Encoding': 'gzip' }, signal: AbortSignal.timeout(timeoutMs) });
+async function fetchJson(url, timeoutMs = 9000, extraHeaders = {}) {
+  const res = await fetch(url, { headers: { 'User-Agent': UA, Accept: 'application/json', 'Accept-Encoding': 'gzip', ...extraHeaders }, signal: AbortSignal.timeout(timeoutMs) });
   if (!res.ok) throw new Error(`status HTTP ${res.status}`);
   return res.json();
 }
@@ -131,6 +131,55 @@ export async function previsao_tempo({ cidade, dias = 3 }) {
   }
 }
 
+// ---------------- futebol (football-data.org, chave gratis em FOOTBALL_DATA_API_KEY) ----------------
+// O plano gratis cobre so estas competicoes (Copa do Brasil e Libertadores NAO).
+const LIGAS = {
+  brasileirao: 'BSA', premier_league: 'PL', la_liga: 'PD', serie_a_italia: 'SA', bundesliga: 'BL1', ligue_1: 'FL1',
+  champions: 'CL', copa_do_mundo: 'WC', eurocopa: 'EC', eredivisie: 'DED', primeira_liga_portugal: 'PPL',
+};
+const STATUS = { FINISHED: 'encerrado', SCHEDULED: 'agendado', TIMED: 'agendado', IN_PLAY: 'em andamento', PAUSED: 'intervalo', POSTPONED: 'adiado', CANCELLED: 'cancelado', SUSPENDED: 'suspenso' };
+const ymd = (ms) => new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(new Date(ms));
+
+/** Converte a resposta da API em jogos legiveis (funcao pura, testavel). */
+export function parseMatches(data, time = null) {
+  const want = time ? norm(time) : null;
+  return (data?.matches || [])
+    .map((m) => {
+      const score = m.score?.fullTime;
+      const played = score && score.home != null && score.away != null;
+      return {
+        quando: brTime(Date.parse(m.utcDate) / 1000),
+        status: STATUS[m.status] || m.status,
+        rodada: m.matchday ?? undefined,
+        jogo: played ? `${m.homeTeam.shortName || m.homeTeam.name} ${score.home} x ${score.away} ${m.awayTeam.shortName || m.awayTeam.name}` : `${m.homeTeam.shortName || m.homeTeam.name} x ${m.awayTeam.shortName || m.awayTeam.name}`,
+        _names: norm(`${m.homeTeam.name} ${m.homeTeam.shortName} ${m.homeTeam.tla} ${m.awayTeam.name} ${m.awayTeam.shortName} ${m.awayTeam.tla}`),
+        _t: Date.parse(m.utcDate),
+      };
+    })
+    .filter((g) => !want || g._names.includes(want))
+    .sort((a, b) => a._t - b._t);
+}
+
+export async function jogos_futebol({ liga = 'brasileirao', time = null, dias_atras = 5, dias_a_frente = 2 }) {
+  const key = process.env.FOOTBALL_DATA_API_KEY;
+  if (!key) return { erro: 'a consulta de futebol ainda nao esta configurada (falta a chave FOOTBALL_DATA_API_KEY no .env)' };
+  const code = LIGAS[norm(liga).replace(/[\s-]+/g, '_')];
+  if (!code) return { erro: `liga "${liga}" nao disponivel (disponiveis: ${Object.keys(LIGAS).join(', ')}; Copa do Brasil e Libertadores nao estao na fonte gratuita)` };
+  const back = Math.min(Math.max(Number(dias_atras) || 0, 0), 7);
+  const fwd = Math.min(Math.max(Number(dias_a_frente) || 0, 0), 3);
+  const from = ymd(Date.now() - back * 86400000);
+  const to = ymd(Date.now() + fwd * 86400000);
+  try {
+    const data = await cached(`fd:${code}:${from}:${to}`, 5 * 60_000, () => fetchJson(`https://api.football-data.org/v4/competitions/${code}/matches?dateFrom=${from}&dateTo=${to}`, 9000, { 'X-Auth-Token': key }));
+    const games = parseMatches(data, time);
+    if (games.length === 0) return { liga, time, jogos: [], aviso: 'nenhum jogo encontrado nesse periodo' };
+    const limited = time ? games.slice(-6) : games.slice(-14);
+    return { liga, jogos: limited.map(({ quando, status, rodada, jogo }) => ({ quando, status, rodada, jogo })), fonte: 'football-data.org' };
+  } catch (err) {
+    return { erro: `nao consegui buscar os jogos agora (${err.message})` };
+  }
+}
+
 // ---------------- noticias ----------------
 export async function noticias({ assunto = 'games', quantidade = 5 }) {
   const n = Math.min(Math.max(Number(quantidade) || 5, 1), 8);
@@ -171,6 +220,22 @@ export const LIVE_TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'jogos_futebol',
+      description: 'Placares, resultados e proximos jogos de futebol numa liga (Brasileirao, Premier League, La Liga, Serie A italiana, Bundesliga, Ligue 1, Champions, Copa do Mundo...), opcionalmente so de um time.',
+      parameters: {
+        type: 'object',
+        properties: {
+          liga: { type: 'string', description: `Uma de: ${Object.keys(LIGAS).join(', ')} (padrao brasileirao).` },
+          time: { type: 'string', description: 'Nome do time pra filtrar (ex: "Palmeiras"). Omita pra ver a liga toda.' },
+          dias_atras: { type: 'integer', description: 'Quantos dias pra tras olhar (padrao 5, max 7).' },
+          dias_a_frente: { type: 'integer', description: 'Quantos dias pra frente olhar (padrao 2, max 3).' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'noticias',
       description: 'Manchetes recentes: de games (IGN Brasil, Canaltech) ou noticias gerais (G1).',
       parameters: {
@@ -181,4 +246,4 @@ export const LIVE_TOOLS = [
   },
 ];
 
-export const LIVE_IMPLS = { cotacao, previsao_tempo, noticias };
+export const LIVE_IMPLS = { cotacao, previsao_tempo, jogos_futebol, noticias };
