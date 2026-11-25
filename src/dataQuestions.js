@@ -1,5 +1,6 @@
 import { PERSONA } from './persona.js';
 import { LIVE_TOOLS, LIVE_IMPLS } from './liveData.js';
+import { runAgent } from './agent.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -353,6 +354,8 @@ function buildSystemPrompt() {
     'refere (pronomes como "ele"/"isso", "o que ele quis dizer?", "resume o que acabaram de falar", "concorda?") e responda ' +
     'DIRETAMENTE, sem chamar funcao, em ate 3 frases curtas, so com base nesse contexto — sem inventar o que nao foi dito. ' +
     'Pra perguntas de estatistica/ranking/contagem, continue usando as funcoes normalmente. ' +
+    'Voce pode usar VARIAS funcoes em sequencia quando a pergunta pedir (ex: pegar o dolar e depois comparar com o que o grupo falou); ' +
+    'confira o resultado de cada uma antes de decidir a proxima, e pare assim que tiver o suficiente. ' +
     'Voce conversa livremente com o grupo, em portugues do Brasil, sobre qualquer assunto (opiniao, explicacao, ideia, ' +
     'piada, conselho, curiosidade, conhecimento geral): responda direto, sem chamar funcao, no seu jeito. ' +
     'Pra estatisticas do grupo, use SOMENTE as funcoes de dados do grupo (contar_top3, total_mensagens, ranking_periodo, ' +
@@ -383,12 +386,11 @@ function buildSystemPrompt() {
 }
 
 /**
- * Responde uma pergunta em linguagem natural sobre os dados do grupo, usando
- * function calling da OpenAI restrito a um conjunto fixo de consultas
- * (top3, total de mensagens, ranking). Fora desse escopo, a propria IA
- * responde que nao esta preparada, sem chamar nenhuma funcao.
+ * Responde uma mensagem dirigida ao bot (conversa livre + dados do grupo +
+ * dados ao vivo). A IA roda como agente (src/agent.js): pode encadear varias
+ * funcoes antes de responder, com limite de passos e de gasto por pergunta.
  */
-export async function answerDataQuestion(client, groupJid, question, { context = [], quoted = null } = {}) {
+export async function answerDataQuestion(client, groupJid, question, { context = [], quoted = null, asker = null } = {}) {
   const records = getAllRecordsForGroup(groupJid);
 
   // Contexto da conversa (so pra entender a pergunta): as ultimas mensagens do
@@ -407,43 +409,17 @@ export async function answerDataQuestion(client, groupJid, question, { context =
     { role: 'user', content: userContent },
   ];
 
-  const first = await client.chat.completions.create({
+  const { answer, outcome } = await runAgent({
+    client,
     model: CHAT_MODEL,
     messages,
     tools: TOOLS,
-    tool_choice: 'auto',
-    temperature: 0.4,
-    max_tokens: 500,
+    callTool: async (name, args) => {
+      const impl = TOOL_IMPLS[name];
+      return impl ? await impl(records, args) : { erro: 'funcao desconhecida' };
+    },
+    meta: { asker, question },
   });
 
-  const choice = first.choices[0];
-  const toolCalls = choice.message.tool_calls;
-
-  if (!toolCalls || toolCalls.length === 0) {
-    return choice.message.content?.trim() || 'Hmm, travei aqui e não consegui pensar numa resposta 😅 pergunta de novo?';
-  }
-
-  messages.push(choice.message);
-  for (const call of toolCalls) {
-    const impl = TOOL_IMPLS[call.function.name];
-    let result;
-    try {
-      const args = JSON.parse(call.function.arguments || '{}');
-      result = impl ? await impl(records, args) : { erro: 'funcao desconhecida' };
-    } catch (err) {
-      result = { erro: String(err) };
-    }
-    messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) });
-  }
-
-  const second = await client.chat.completions.create({
-    model: CHAT_MODEL,
-    messages,
-    temperature: 0.3,
-    // listar_mensagens pode trazer ate 60 mensagens pra IA reproduzir —
-    // precisa de bem mais espaco que uma resposta curta de 1-3 frases.
-    max_tokens: 3000,
-  });
-
-  return second.choices[0]?.message?.content?.trim() || 'Travei aqui e não consegui montar uma resposta com esses dados 😵 tenta de novo?';
+  return answer || (outcome === 'empty' ? 'Hmm, travei aqui e não consegui pensar numa resposta 😅 pergunta de novo?' : 'Travei aqui e não consegui montar uma resposta com esses dados 😵 tenta de novo?');
 }
