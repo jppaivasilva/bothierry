@@ -333,5 +333,10 @@
   "pr": 68,
   "titulo": "Aba Aniversários + fim do nome duplicado",
   "resumo": "Os aniversários saíram da aba Comandos e ganharam aba própria (por mês, com busca, o próximo em destaque e a ligação aniversariante → membro do admin). Pessoa adicionada na mão que depois vira membro de verdade deixa de aparecer duas vezes: a ligação e a foto passam pro membro real. Nomes iguais em Perfis ganham um sufixo pra diferenciar."
+ },
+ {
+  "pr": 69,
+  "titulo": "Limite de IA mensal e gráfico com valores",
+  "resumo": "A trava de gasto de US$ 5 passa a valer por mês de calendário (zera no dia 1º; AI_MONTHLY_BUDGET_USD). Na aba Consumo: novo cartão \"Este mês\" e o gráfico de custo por dia agora mostra os valores nas barras e as datas."
  }
 ]
