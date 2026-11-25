@@ -9,6 +9,8 @@ import { deleteAudioByName, listAudioFiles } from './bot/audioCommands.js';
 import { announceNewEvent } from './bot/eventCommands.js';
 import { COMMAND_CATEGORIES } from './bot/commands.js';
 import { loadBirthdays } from './birthdays.js';
+import { aiQueue } from './bot/aiJobs.js';
+import { getSendStats } from './bot/reliableSend.js';
 
 const DASHBOARD_PORT = 4321;
 
@@ -16,6 +18,7 @@ startCrons();
 startDashboardServer(DASHBOARD_PORT, {
   getPairingQr,
   getHealth: () => ({ ...waState }),
+  getQueueStats: () => ({ ...aiQueue.getStats(), send: getSendStats() }),
   deleteAudio: deleteAudioByName,
   announceEvent: announceNewEvent,
   getCommandsMenu: () => ({

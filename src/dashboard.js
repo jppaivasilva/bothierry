@@ -882,6 +882,12 @@ ${FAVICON_TAGS}
 
   <div id="tab-agent" class="tab-panel">
   <div class="sub" id="agentSub">O que o agente de IA fez em cada pergunta (passos, funções consultadas, custo) · só o root vê esta aba</div>
+  <div class="chart-box" style="margin-bottom:20px;">
+    <div class="title">Fila de respostas</div>
+    <div class="ver-desc">Cada pergunta ao bot entra numa fila: no máximo 3 ao mesmo tempo, em ordem, e a resposta é reenviada se o WhatsApp cair.</div>
+    <div class="cards" id="queueCards" style="margin-top:12px;"></div>
+    <div id="queueRecent"></div>
+  </div>
   <div class="cards" id="agentCards"></div>
   <div class="charts">
     <div class="chart-box"><div class="title">Funções mais usadas (30 dias)</div><div id="agentTools" style="margin-top:10px;"></div></div>
@@ -1816,7 +1822,29 @@ async function loadUsage() {
 
 // ---------- Agente de IA (admin) ----------
 const OUTCOME_LABELS = { ok: 'Respondeu normal', max_steps: 'Bateu o limite de passos', cost_cap: 'Bateu o teto de custo', empty: 'Sem resposta', budget: 'Limite mensal de gasto', error: 'Erro' };
+var QUEUE_STATUS = { enviada: 'Enviada', falhou: 'Falhou', expirada: 'Expirou' };
+var QUEUE_KIND = { contingencia: 'resposta de contingência', orcamento: 'limite de gasto', foto_perdida: 'foto perdida no reinício' };
+async function loadQueue() {
+  try {
+    const q = await fetch('/api/admin/queue').then((r) => r.json());
+    if (q.pending === undefined) return;
+    const card = (label, value, sub, color) => '<div class="card"><div class="label"><span class="dot" style="--dot-color:' + color + '"></span>' + label + '</div><div class="value" style="font-size:26px;">' + value + '</div><div class="label">' + sub + '</div></div>';
+    const s = q.send || {};
+    document.getElementById('queueCards').innerHTML =
+      card('Na fila agora', String(q.pending), q.running + ' respondendo · ' + q.waitingRetry + ' esperando reenvio', q.pending ? 'var(--accent-orange)' : 'var(--accent-green)') +
+      card('Enviadas (24 h)', String(q.sent24h), 'espera média ' + (q.avgWaitMs / 1000).toFixed(1) + ' s · total ' + (q.avgTotalMs / 1000).toFixed(1) + ' s', 'var(--accent-blue)') +
+      card('Não entregues (24 h)', String(q.failed24h), q.failed24h ? 'veja a lista abaixo' : 'nenhuma', q.failed24h ? 'var(--accent-red)' : 'var(--accent-green)') +
+      card('Envios ao WhatsApp', String(s.sent || 0), (s.retried || 0) + ' reenvios · ' + (s.waitedForConnection || 0) + ' esperas por reconexão · ' + (s.failed || 0) + ' falhas', 'var(--accent-purple)');
+    const rows = (q.recent || []).filter((h) => h.status !== 'enviada' || h.kind);
+    document.getElementById('queueRecent').innerHTML = rows.length
+      ? '<table style="width:100%; margin-top:10px;"><tr><th style="text-align:left;">Pergunta</th><th>Resultado</th><th style="text-align:left;">Detalhe</th></tr>' + rows.map((h) => '<tr><td>' + escapeHtml(h.asker || '?') + ': ' + escapeHtml(h.question || '') + '</td><td style="text-align:center;">' + (h.status === 'enviada' ? '✅' : '⚠️') + ' ' + escapeHtml(QUEUE_STATUS[h.status] || h.status) + '</td><td>' + escapeHtml((h.error || '') + (h.kind ? (h.error ? ' · ' : '') + (QUEUE_KIND[h.kind] || h.kind) : '')) + '</td></tr>').join('') + '</table>'
+      : '<div class="ver-desc" style="margin-top:10px;">Nenhuma pergunta com problema nas últimas respostas 👍</div>';
+  } catch (err) {
+    // sem a fila, o resto da aba continua
+  }
+}
 async function loadAgent() {
+  loadQueue();
   try {
     const a = await fetch('/api/admin/agent').then((r) => r.json());
     if (a.questions === undefined) { document.getElementById('agentSub').textContent = 'Não consegui carregar o agente.'; return; }
@@ -2611,6 +2639,7 @@ export function startDashboardServer(
     announceEvent = async () => {},
     getPairingQr = () => null,
     getHealth = () => ({ connected: true, since: Date.now(), loggedOut: false }),
+    getQueueStats = () => null,
   } = {},
 ) {
   const server = http.createServer((req, res) => {
@@ -2815,6 +2844,9 @@ export function startDashboardServer(
     } else if (req.url === '/api/admin/usage' && req.method === 'GET') {
       if (!isAdmin(req)) return sendJson(res, 403, { error: 'só o administrador pode ver isso' });
       sendJson(res, 200, getUsageSummary());
+    } else if (req.url === '/api/admin/queue' && req.method === 'GET') {
+      if (!isAdmin(req)) return sendJson(res, 403, { error: 'só o administrador pode ver isso' });
+      sendJson(res, 200, getQueueStats() || {});
     } else if (req.url === '/api/admin/agent' && req.method === 'GET') {
       if (!isAdmin(req)) return sendJson(res, 403, { error: 'só o administrador pode ver isso' });
       sendJson(res, 200, getAgentOverview());
