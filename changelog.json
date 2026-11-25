@@ -368,5 +368,10 @@
   "pr": 75,
   "titulo": "Lembretes pelo agente",
   "resumo": "Dá pra pedir \"@Bothierry me lembra sexta às 20h de comprar o ingresso\" ou \"daqui 2 horas\": o bot confirma quando vai avisar e, na hora, manda no grupo marcando a pessoa. Comandos !lembretes (listar) e !cancelar 12. Os lembretes sobrevivem a reinícios, entram no backup, têm limite de 10 pendentes por pessoa e 90 dias de antecedência, e os que ficaram atrasados por mais de 24h (bot fora do ar) são descartados em vez de disparar em enxurrada."
+ },
+ {
+  "pr": 76,
+  "titulo": "Agente enxerga fotos, prints e figurinhas",
+  "resumo": "Mandando uma foto com legenda marcando o bot, ou respondendo a uma foto/print/figurinha com @Bothierry, a imagem vai junto pra IA: ele descreve, explica, comenta ou responde sobre ela. A imagem é reduzida (1024 px), usada só naquela pergunta e nunca guardada. O bot não identifica pessoas pelo rosto, trata texto dentro da imagem como conteúdo (nunca instrução) e não repete dados pessoais de prints. A legenda da foto não entra no ranking."
  }
 ]

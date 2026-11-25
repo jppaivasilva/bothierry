@@ -13,6 +13,7 @@ import { sendAudioByName } from './audioCommands.js';
 import { jidNormalizedUser } from '@whiskeysockets/baileys';
 import { isOnBotChatCooldown, getQuotedMessage, getRecentConversation } from './botConversation.js';
 import { answerDataQuestion } from '../dataQuestions.js';
+import { getImageForBot } from './vision.js';
 
 // Janela de tempo em que um link repetido e avisado pelo bot.
 const LINK_REPEAT_WINDOW_HOURS = 24;
@@ -67,6 +68,10 @@ sock.ev.on('messages.upsert', async ({ messages, type }) => {
         msg.message.conversation ||
         msg.message.extendedTextMessage?.text ||
         '';
+      // Foto com legenda marcando o bot ("@Bothierry o que e isso?") tambem e falar com ele. A legenda NAO vira
+      // "text": nao entra no ranking nem nos comandos, so no fluxo de conversa com o bot.
+      const imageCaption = msg.message.imageMessage?.caption || '';
+      const botText = text || imageCaption;
 
       debugLog(`[debug] mensagem de grupo recebida — grupo="${groupName}" remetente="${senderName}" fromMe=${msg.key.fromMe} texto="${text}"`);
 
@@ -200,20 +205,20 @@ sock.ev.on('messages.upsert', async ({ messages, type }) => {
         // Nao e um comando fixo — confere se bate com o nome de um audio em audios/.
         debugLog(`[debug] comando ${commandName} nao reconhecido, checando se e um audio...`);
         await sendAudioByName({ sock, groupJid }, commandName);
-      } else if (text) {
+      } else if (botText) {
         // Nao e comando nenhum — confere se a mensagem menciona o proprio bot
         // diretamente (@bot). O WhatsApp identifica o bot de duas formas
         // dependendo do contexto: pelo numero de telefone (@s.whatsapp.net) ou
         // pelo "lid", um identificador de privacidade mais novo (@lid) — a
         // mencao pode vir em qualquer um dos dois, entao comparamos contra ambos.
-        const mentionedJids = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+        const mentionedJids = (msg.message?.extendedTextMessage?.contextInfo || msg.message?.imageMessage?.contextInfo)?.mentionedJid || [];
         const botIdentifiers = [sock.user?.id, sock.user?.lid].filter(Boolean).map(jidNormalizedUser);
         const isBotMentioned = mentionedJids.some((jid) => botIdentifiers.includes(jidNormalizedUser(jid)));
         // Resposta a uma mensagem do bot (sem marcar ele) tambem conta como falar com ele. Risada
         // ("kkk", "haha") e mensagens de 1-2 letras ficam de fora; xingamento e checado a partir de 3
         // letras, mas so responde de verdade (IA) com 8+ letras — pra nao responder todo "bom dia" a um cartao.
         const quotedInfo = msg.message?.extendedTextMessage?.contextInfo;
-        const replyLetterText = text.replace(/[^\p{L}]/gu, '');
+        const replyLetterText = botText.replace(/[^\p{L}]/gu, '');
         const replyLetters = replyLetterText.length;
         const isReplyToBot =
           !!quotedInfo?.quotedMessage && !!quotedInfo.participant && botIdentifiers.includes(jidNormalizedUser(quotedInfo.participant)) &&
@@ -225,7 +230,7 @@ sock.ev.on('messages.upsert', async ({ messages, type }) => {
 
         if (addressedToBot) {
           const quotedMessage = getQuotedMessage(msg, groupJid, botIdentifiers);
-          const insulted = await isInsultToBot(text, isReplyToBot ? quotedMessage?.text : null);
+          const insulted = await isInsultToBot(botText, isReplyToBot ? quotedMessage?.text : null);
           if (insulted) {
             debugLog(`[debug] insulto ao bot detectado de ${senderName}`);
             try {
@@ -244,11 +249,13 @@ sock.ev.on('messages.upsert', async ({ messages, type }) => {
             if (!client) {
               debugLog('[debug] bot mencionado mas OPENAI_API_KEY nao configurada, ignorando pergunta.');
             } else {
-              const question = text.replace(/@\d+/g, '').trim();
+              const question = botText.replace(/@\d+/g, '').trim();
               if (question && (isBotMentioned || replyLetters >= 8)) {
                 debugLog(`[debug] pergunta de dados detectada: "${question}"`);
                 try {
+                  const image = await getImageForBot(msg);
                   const answer = await answerDataQuestion(client, groupJid, question, {
+                    image,
                     context: getRecentConversation(groupJid, text),
                     quoted: quotedMessage,
                     asker: senderName,

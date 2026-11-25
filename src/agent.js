@@ -34,7 +34,7 @@ function withTimeout(promise, ms) {
 export async function runAgent({ client, model, messages, tools, callTool, temperature = 0.4, maxTokens = 3000, meta = {}, limits = {} }) {
   const lim = { ...AGENT_LIMITS, ...limits };
   const startedAt = Date.now();
-  const trace = { ts: Math.floor(startedAt / 1000), asker: meta.asker || null, question: clip(meta.question, 300), outcome: 'ok', steps: [], costUsd: 0, totalMs: 0, answer: null };
+  const trace = { ts: Math.floor(startedAt / 1000), asker: meta.asker || null, question: clip(meta.question, 300), image: meta.image || undefined, outcome: 'ok', steps: [], costUsd: 0, totalMs: 0, answer: null };
   const seen = new Map(); // consulta repetida (mesma funcao+argumentos) reaproveita o resultado
   let costUsd = 0;
   let forced = null;
