@@ -353,5 +353,10 @@
   "pr": 72,
   "titulo": "Agente de IA: raciocínio em vários passos",
   "resumo": "A IA do bot vira um agente: em vez de uma consulta só, pode encadear várias funções (ex.: cotação + o que o grupo falou) e conferir cada resultado antes de responder, com limite de 5 passos e de US$ 0,05 por pergunta, consultas repetidas reaproveitadas e timeout por função. Nova aba Agente (só root) mostra cada pergunta com passos, funções, custo e erros. Limite mensal de gasto sobe para US$ 10."
+ },
+ {
+  "pr": 73,
+  "titulo": "Agente com memória",
+  "resumo": "O bot agora lembra: memória de curto prazo (as últimas trocas com cada pessoa por ~20 min, pra \"e amanhã?\" funcionar) e de longo prazo (fatos leves que a pessoa conta sobre si ou pede pra anotar, como time e jogo favorito, e fatos do grupo). Regras de privacidade no código: nada de saúde, política, religião, dinheiro, endereço, documentos ou contatos, e nada sobre outra pessoa. Comandos !memoria (ver) e !esquecer (apagar um ou tudo); cada um só apaga o que é seu."
  }
 ]
