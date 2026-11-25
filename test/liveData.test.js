@@ -1,7 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import os from 'os';
+import path from 'path';
 import { symbolFor, cotacao, previsao_tempo, LIVE_TOOLS, LIVE_IMPLS } from '../src/liveData.js';
-import { answerDataQuestion } from '../src/dataQuestions.js';
+
+// O agente grava um traco por pergunta: manda pra um arquivo temporario, nunca pro real.
+process.env.AGENT_TRACES_FILE = path.join(os.tmpdir(), `bothierry-test-traces-${process.pid}.jsonl`);
+const { answerDataQuestion } = await import('../src/dataQuestions.js');
 
 test('symbolFor: nomes comuns, acoes brasileiras e americanas', () => {
   assert.equal(symbolFor('Dólar'), 'USDBRL=X');

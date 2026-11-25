@@ -25,11 +25,12 @@ const WHISPER_USD_PER_MINUTE = 0.006;
 // Trava de gasto: passou do limite do MES (US$, estimado, mes de calendario no
 // fuso de Brasilia), as chamadas de IA sao recusadas ate o dia 1o (o bot segue
 // funcionando sem IA). Mude o limite com AI_MONTHLY_BUDGET_USD no .env; 0 desliga.
-export const MONTHLY_BUDGET_USD = process.env.AI_MONTHLY_BUDGET_USD !== undefined && process.env.AI_MONTHLY_BUDGET_USD !== '' ? Number(process.env.AI_MONTHLY_BUDGET_USD) : 5;
+export const MONTHLY_BUDGET_USD = process.env.AI_MONTHLY_BUDGET_USD !== undefined && process.env.AI_MONTHLY_BUDGET_USD !== '' ? Number(process.env.AI_MONTHLY_BUDGET_USD) : 10;
 
 // Funcao que fez a chamada (lida da pilha de execucao) -> nome mostrado no painel.
 const FEATURES = {
   answerDataQuestion: 'Perguntas ao bot',
+  runAgent: 'Perguntas ao bot',
   isInsultToBot: 'Detector de insulto',
   isIphoneDepreciative: 'Regra do iPhone',
   commandResumo: 'Resumo (!resumo)',
@@ -48,6 +49,11 @@ function featureFromStack() {
 
 // A API devolve o modelo com data (gpt-4o-mini-2024-07-18); a tabela de precos usa o nome sem a data.
 const baseModel = (model) => String(model).replace(/-\d{4}-\d{2}-\d{2}$/, '');
+
+/** Custo estimado (US$) de uma chamada, ou null se o modelo nao tem preco cadastrado. Usado tambem pelo agente pra limitar o gasto por pergunta. */
+export function estimateCostUsd(rawModel, usage) {
+  return costOf(baseModel(rawModel), usage);
+}
 
 function costOf(model, usage) {
   const t = TOKEN_PRICES[model];

@@ -348,5 +348,10 @@
   "pr": 71,
   "titulo": "Conversa livre e dados ao vivo",
   "resumo": "O Bothierry agora conversa sobre qualquer assunto quando marcado ou respondido, no jeito dele. Pra dados que mudam (cotação de dólar, euro, bitcoin, Ibovespa e ações; previsão do tempo de qualquer cidade; manchetes de games e do G1) ele consulta fontes reais e nunca inventa: se a fonte falhar ele avisa, e previsões de bolsa ou resultados ele não chuta. Placar de futebol ainda não tem fonte liberada."
+ },
+ {
+  "pr": 72,
+  "titulo": "Agente de IA: raciocínio em vários passos",
+  "resumo": "A IA do bot vira um agente: em vez de uma consulta só, pode encadear várias funções (ex.: cotação + o que o grupo falou) e conferir cada resultado antes de responder, com limite de 5 passos e de US$ 0,05 por pergunta, consultas repetidas reaproveitadas e timeout por função. Nova aba Agente (só root) mostra cada pergunta com passos, funções, custo e erros. Limite mensal de gasto sobe para US$ 10."
  }
 ]

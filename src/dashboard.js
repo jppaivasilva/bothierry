@@ -19,6 +19,7 @@ import { computeWrapped } from './wrapped.js';
 import { renderWrappedPersonCard } from './wrappedCard.js';
 import { photoToDataUri } from './birthdayCard.js';
 import { getUsageSummary } from './usage.js';
+import { getAgentOverview } from './agent.js';
 import { getFavicon, FAVICON_TAGS } from './favicon.js';
 import { getAvatarPath } from './avatars.js';
 import { loadEvents, addEvent, deleteEvent, eventTitleExists, addAttendee, addAbsentee } from './events.js';
@@ -647,6 +648,7 @@ ${FAVICON_TAGS}
       <button class="tab-btn" data-tab="system">Sistema</button>
       <button class="tab-btn" data-tab="server">Servidor</button>
       <button class="tab-btn admin-only" data-tab="usage">Consumo</button>
+      <button class="tab-btn admin-only" data-tab="agent">Agente</button>
       <button class="tab-btn admin-only" data-tab="versions">Versões</button>
     </div>
 
@@ -878,6 +880,19 @@ ${FAVICON_TAGS}
   <div class="sub" style="margin-top:16px;">Valores <b>estimados</b> a partir dos tokens que o bot registrou desde que esta aba existe, com a tabela de preços do código (<code>src/usage.js</code>). O valor oficial está em platform.openai.com → Usage.</div>
   </div>
 
+  <div id="tab-agent" class="tab-panel">
+  <div class="sub" id="agentSub">O que o agente de IA fez em cada pergunta (passos, funções consultadas, custo) · só o root vê esta aba</div>
+  <div class="cards" id="agentCards"></div>
+  <div class="charts">
+    <div class="chart-box"><div class="title">Funções mais usadas (30 dias)</div><div id="agentTools" style="margin-top:10px;"></div></div>
+    <div class="chart-box"><div class="title">Como as perguntas terminaram (30 dias)</div><div id="agentOutcomes" style="margin-top:10px;"></div></div>
+  </div>
+  <div class="chart-box" style="margin-top:20px;">
+    <div class="title">Últimas perguntas</div>
+    <div id="agentRecent" style="margin-top:10px;"></div>
+  </div>
+  </div>
+
   <div id="tab-versions" class="tab-panel">
   <div class="sub">Histórico do que foi implementado, um item por PR mergeado · só o root vê esta aba</div>
   <div id="versionsList"></div>
@@ -931,6 +946,7 @@ document.querySelectorAll('.tabs:not(#rankingToggle) > .tab-btn').forEach((btn) 
     if (btn.dataset.tab === 'cloud') loadCloud();
     if (btn.dataset.tab === 'versions') loadVersions();
     if (btn.dataset.tab === 'usage') loadUsage();
+    if (btn.dataset.tab === 'agent') loadAgent();
     if (btn.dataset.tab === 'members') loadMembers();
     if (btn.dataset.tab === 'profiles') loadProfilesList();
     if (btn.dataset.tab === 'menu') loadMenu();
@@ -1795,6 +1811,36 @@ async function loadUsage() {
     document.getElementById('usageByModel').innerHTML = usageRows(u.byModel);
   } catch (err) {
     document.getElementById('usageSub').textContent = 'Não consegui carregar o consumo.';
+  }
+}
+
+// ---------- Agente de IA (admin) ----------
+const OUTCOME_LABELS = { ok: 'Respondeu normal', max_steps: 'Bateu o limite de passos', cost_cap: 'Bateu o teto de custo', empty: 'Sem resposta', budget: 'Limite mensal de gasto', error: 'Erro' };
+async function loadAgent() {
+  try {
+    const a = await fetch('/api/admin/agent').then((r) => r.json());
+    if (a.questions === undefined) { document.getElementById('agentSub').textContent = 'Não consegui carregar o agente.'; return; }
+    document.getElementById('agentSub').textContent = a.questions ? 'O que o agente de IA fez nos últimos ' + a.days + ' dias · só o root vê esta aba' : 'Ainda sem perguntas registradas — elas aparecem aqui conforme o grupo falar com o bot.';
+    const card = (label, value, sub, color) => '<div class="card"><div class="label"><span class="dot" style="--dot-color:' + color + '"></span>' + label + '</div><div class="value" style="font-size:26px;">' + value + '</div><div class="label">' + sub + '</div></div>';
+    document.getElementById('agentCards').innerHTML =
+      card('Perguntas', String(a.questions), 'últimos ' + a.days + ' dias', 'var(--accent-blue)') +
+      card('Passos por pergunta', a.avgSteps.toFixed(1), 'rodadas de IA (1 = respondeu direto)', 'var(--accent-purple)') +
+      card('Custo por pergunta', fmtUsd(a.avgCostUsd), 'total ' + fmtUsd(a.totalCostUsd), 'var(--accent-red)') +
+      card('Tempo médio', (a.avgMs / 1000).toFixed(1) + ' s', 'da mensagem até a resposta', 'var(--accent-green)');
+    document.getElementById('agentTools').innerHTML = a.tools.length
+      ? '<table style="width:100%;"><tr><th style="text-align:left;">Função</th><th>Chamadas</th><th>Com erro</th></tr>' + a.tools.map((t) => '<tr><td>' + escapeHtml(t.name) + '</td><td style="text-align:center;">' + t.calls + '</td><td style="text-align:center;">' + (t.errors ? '<b style="color:var(--accent-red)">' + t.errors + '</b>' : '0') + '</td></tr>').join('') + '</table>'
+      : '<div class="ver-desc">Nenhuma função chamada ainda.</div>';
+    document.getElementById('agentOutcomes').innerHTML = Object.keys(a.outcomes).length
+      ? '<table style="width:100%;">' + Object.entries(a.outcomes).map(([k, v]) => '<tr><td>' + escapeHtml(OUTCOME_LABELS[k] || k) + '</td><td style="text-align:right;">' + v + '</td></tr>').join('') + '</table>'
+      : '<div class="ver-desc">Sem dados.</div>';
+    document.getElementById('agentRecent').innerHTML = a.recent.length ? a.recent.map((t) => {
+      const when = new Date(t.ts * 1000).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+      const stepsHtml = t.steps.map((s) => '<div class="ver-meta" style="margin:2px 0;">passo ' + s.n + ' · ' + fmtTok((s.inTok || 0) + (s.outTok || 0)) + ' tokens · ' + fmtUsd(s.costUsd || 0) + (s.tools.length ? ' → ' + s.tools.map((c) => escapeHtml(c.name) + '(' + escapeHtml(c.args) + ') ' + c.ms + 'ms' + (c.erro ? ' ⚠ ' + escapeHtml(c.erro) : '') + (c.reused ? ' (repetida)' : '')).join('; ') : ' → resposta') + '</div>').join('');
+      return '<details class="ver-item" style="display:block;"><summary style="cursor:pointer;"><b>' + escapeHtml(t.asker || '?') + '</b>: ' + escapeHtml(t.question || '') + ' <span class="ver-meta">· ' + when + ' · ' + t.steps.length + ' passo(s) · ' + fmtUsd(t.costUsd || 0) + ' · ' + escapeHtml(OUTCOME_LABELS[t.outcome] || t.outcome) + '</span></summary>' +
+        (t.answer ? '<div class="ver-desc" style="margin-top:6px;">' + escapeHtml(t.answer) + '</div>' : '') + (t.error ? '<div class="ver-desc">Erro: ' + escapeHtml(t.error) + '</div>' : '') + stepsHtml + '</details>';
+    }).join('') : '<div class="ver-desc">Ainda sem perguntas.</div>';
+  } catch (err) {
+    document.getElementById('agentSub').textContent = 'Não consegui carregar o agente.';
   }
 }
 
@@ -2769,6 +2815,9 @@ export function startDashboardServer(
     } else if (req.url === '/api/admin/usage' && req.method === 'GET') {
       if (!isAdmin(req)) return sendJson(res, 403, { error: 'só o administrador pode ver isso' });
       sendJson(res, 200, getUsageSummary());
+    } else if (req.url === '/api/admin/agent' && req.method === 'GET') {
+      if (!isAdmin(req)) return sendJson(res, 403, { error: 'só o administrador pode ver isso' });
+      sendJson(res, 200, getAgentOverview());
     } else if (req.url === '/api/admin/qr' && req.method === 'GET') {
       // QR de pareamento do WhatsApp: so existe enquanto o bot esta deslogado esperando leitura.
       if (!isAdmin(req)) return sendJson(res, 403, { error: 'só o administrador pode ver isso' });

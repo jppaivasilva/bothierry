@@ -251,6 +251,7 @@ sock.ev.on('messages.upsert', async ({ messages, type }) => {
                   const answer = await answerDataQuestion(client, groupJid, question, {
                     context: getRecentConversation(groupJid, text),
                     quoted: quotedMessage,
+                    asker: senderName,
                   });
                   const sent = await sock.sendMessage(groupJid, { text: answer });
                   if (sent?.key?.id) sentByBot.add(sent.key.id);
