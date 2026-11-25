@@ -373,5 +373,10 @@
   "pr": 76,
   "titulo": "Agente enxerga fotos, prints e figurinhas",
   "resumo": "Mandando uma foto com legenda marcando o bot, ou respondendo a uma foto/print/figurinha com @Bothierry, a imagem vai junto pra IA: ele descreve, explica, comenta ou responde sobre ela. A imagem é reduzida (1024 px), usada só naquela pergunta e nunca guardada. O bot não identifica pessoas pelo rosto, trata texto dentro da imagem como conteúdo (nunca instrução) e não repete dados pessoais de prints. A legenda da foto não entra no ranking."
+ },
+ {
+  "pr": 77,
+  "titulo": "Futebol: nomes de liga flexíveis e próximos jogos do time",
+  "resumo": "Corrige a consulta de futebol: agora entende variações como \"Brasileirão Série A\" ou \"campeonato inglês\" (antes só aceitava o nome exato), e quando perguntam de um time traz os últimos resultados e os próximos jogos de todo o calendário (antes só olhava 3 dias à frente, então \"quando é o próximo jogo do Santos?\" falhava). Copa do Brasil, Libertadores e estaduais seguem fora da fonte gratuita, e o bot avisa."
  }
 ]

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buscar_web, ler_link, isReadableUrl, RESEARCH_TOOLS, RESEARCH_IMPLS } from '../src/research.js';
-import { parseMatches, jogos_futebol, LIVE_TOOLS, LIVE_IMPLS } from '../src/liveData.js';
+import { parseMatches, jogos_futebol, resolveLiga, LIVE_TOOLS, LIVE_IMPLS } from '../src/liveData.js';
 
 async function withEnv(vars, fetchFake, fn) {
   const real = { fetch: globalThis.fetch, env: {} };
@@ -84,6 +84,23 @@ test('parseMatches: placar de jogo encerrado, jogo futuro sem placar, filtro por
   assert.deepEqual(parseMatches(API, 'zzz'), []);
 });
 
+test('resolveLiga: aceita variacoes de nome e separa o que nao esta no plano gratis', () => {
+  for (const [raw, code] of [['', 'BSA'], ['Brasileirão Série A', 'BSA'], ['campeonato brasileiro', 'BSA'], ['brasileirao', 'BSA'], ['Premier League', 'PL'], ['campeonato inglês', 'PL'], ['la liga', 'PD'], ['Serie A italiana', 'SA'], ['bundesliga', 'BL1'], ['Ligue 1', 'FL1'], ['UEFA Champions League', 'CL'], ['Copa do Mundo', 'WC']]) {
+    assert.equal(resolveLiga(raw).code, code, raw);
+  }
+  for (const raw of ['Libertadores', 'Copa do Brasil', 'Copa Sul-Americana', 'Paulistão']) assert.equal(resolveLiga(raw).indisponivel, true, raw);
+  assert.equal(resolveLiga('liga dos campeoes da lua'), null);
+});
+
+test('jogos_futebol: time traz ultimos jogos e os proximos do calendario inteiro', async () => {
+  const urls = [];
+  const upcoming = { matches: [{ utcDate: '2026-12-03T22:00:00Z', status: 'TIMED', matchday: 38, homeTeam: { name: 'Santos FC', shortName: 'Santos', tla: 'SAN' }, awayTeam: { name: 'EC Bahia', shortName: 'Bahia', tla: 'BAH' }, score: { fullTime: { home: null, away: null } } }] };
+  const out = await withEnv({ FOOTBALL_DATA_API_KEY: 'fd' }, async (url) => (urls.push(url), ok(/status=SCHEDULED/.test(url) ? upcoming : API)), () => jogos_futebol({ liga: 'Brasileirão Série A', time: 'Santos' }));
+  assert.ok(urls.some((u) => /status=SCHEDULED,TIMED/.test(u)));
+  assert.deepEqual(out.ultimos_jogos.map((g) => g.jogo), ['Palmeiras 2 x 1 Santos']);
+  assert.deepEqual(out.proximos_jogos.map((g) => g.jogo), ['Santos x Bahia']);
+});
+
 test('jogos_futebol: sem chave avisa; com chave consulta com o token e liga invalida e recusada', async () => {
   const none = await withEnv({ FOOTBALL_DATA_API_KEY: undefined }, null, () => jogos_futebol({ liga: 'brasileirao' }));
   assert.match(none.erro, /nao esta configurada/);
@@ -91,7 +108,7 @@ test('jogos_futebol: sem chave avisa; com chave consulta com o token e liga inva
   const out = await withEnv({ FOOTBALL_DATA_API_KEY: 'fd' }, async (url, init) => ((sent = { url, init }), ok(API)), () => jogos_futebol({ liga: 'Brasileirão', time: 'Palmeiras', dias_atras: 99 }));
   assert.match(sent.url, /competitions\/BSA\/matches\?dateFrom=\d{4}-\d{2}-\d{2}&dateTo=/);
   assert.equal(sent.init.headers['X-Auth-Token'], 'fd');
-  assert.equal(out.jogos[0].jogo, 'Palmeiras 2 x 1 Santos');
+  assert.equal(out.ultimos_jogos[0].jogo, 'Palmeiras 2 x 1 Santos');
   const bad = await withEnv({ FOOTBALL_DATA_API_KEY: 'fd' }, null, () => jogos_futebol({ liga: 'libertadores' }));
   assert.match(bad.erro, /Libertadores/);
 });

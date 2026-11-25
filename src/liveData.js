@@ -160,21 +160,53 @@ export function parseMatches(data, time = null) {
     .sort((a, b) => a._t - b._t);
 }
 
+/**
+ * Entende o nome da liga que a IA mandou ("Brasileirão Série A", "campeonato brasileiro", "premier"...).
+ * Devolve { code } ou { indisponivel } (Copa do Brasil, Libertadores... fora do plano gratis) ou null.
+ */
+export function resolveLiga(raw) {
+  const n = norm(raw);
+  if (!n) return { code: 'BSA' };
+  if (/libertadores|sul.?americana|copa do brasil|carioca|paulista|mineiro|gaucho/.test(n)) return { indisponivel: true };
+  const rules = [
+    [/champions/, 'CL'], [/mundo|world cup|fifa/, 'WC'], [/eurocopa|euro 20|\beuro\b/, 'EC'],
+    [/premier|ingl/, 'PL'], [/la ?liga|espanh|spain/, 'PD'], [/ital|calcio/, 'SA'], [/bundes|aleman|german/, 'BL1'],
+    [/ligue|franc/, 'FL1'], [/eredivisie|holand|neerland/, 'DED'], [/portug|primeira liga/, 'PPL'],
+    [/brasil|serie a|campeonato brasileiro|brasileir/, 'BSA'],
+  ];
+  for (const [re, code] of rules) if (re.test(n)) return { code };
+  const exact = LIGAS[n.replace(/[\s-]+/g, '_')];
+  return exact ? { code: exact } : null;
+}
+
+const pick = ({ quando, status, rodada, jogo }) => ({ quando, status, rodada, jogo });
+
 export async function jogos_futebol({ liga = 'brasileirao', time = null, dias_atras = 5, dias_a_frente = 2 }) {
   const key = process.env.FOOTBALL_DATA_API_KEY;
   if (!key) return { erro: 'a consulta de futebol ainda nao esta configurada (falta a chave FOOTBALL_DATA_API_KEY no .env)' };
-  const code = LIGAS[norm(liga).replace(/[\s-]+/g, '_')];
-  if (!code) return { erro: `liga "${liga}" nao disponivel (disponiveis: ${Object.keys(LIGAS).join(', ')}; Copa do Brasil e Libertadores nao estao na fonte gratuita)` };
+  const resolved = resolveLiga(liga);
+  if (resolved?.indisponivel) return { erro: 'Copa do Brasil, Libertadores, Sul-Americana e estaduais nao estao na fonte gratuita de jogos — nao consigo consultar essas' };
+  if (!resolved) return { erro: `nao reconheci a liga "${liga}" (disponiveis: ${Object.keys(LIGAS).join(', ')})` };
+  const code = resolved.code;
+  const headers = { 'X-Auth-Token': key };
   const back = Math.min(Math.max(Number(dias_atras) || 0, 0), 7);
   const fwd = Math.min(Math.max(Number(dias_a_frente) || 0, 0), 3);
   const from = ymd(Date.now() - back * 86400000);
   const to = ymd(Date.now() + fwd * 86400000);
+  const base = `https://api.football-data.org/v4/competitions/${code}/matches`;
   try {
-    const data = await cached(`fd:${code}:${from}:${to}`, 5 * 60_000, () => fetchJson(`https://api.football-data.org/v4/competitions/${code}/matches?dateFrom=${from}&dateTo=${to}`, 9000, { 'X-Auth-Token': key }));
-    const games = parseMatches(data, time);
-    if (games.length === 0) return { liga, time, jogos: [], aviso: 'nenhum jogo encontrado nesse periodo' };
-    const limited = time ? games.slice(-6) : games.slice(-14);
-    return { liga, jogos: limited.map(({ quando, status, rodada, jogo }) => ({ quando, status, rodada, jogo })), fonte: 'football-data.org' };
+    const recent = await cached(`fd:${code}:${from}:${to}`, 5 * 60_000, () => fetchJson(`${base}?dateFrom=${from}&dateTo=${to}`, 9000, headers));
+    const games = parseMatches(recent, time);
+    if (!time) {
+      if (games.length === 0) return { liga: code, jogos: [], aviso: 'nenhum jogo encontrado nesse periodo' };
+      return { liga: code, jogos: games.slice(-14).map(pick), fonte: 'football-data.org' };
+    }
+    // Pergunta sobre um time: alem dos jogos recentes, traz os PROXIMOS (o calendario todo, nao so alguns dias a frente).
+    const upcoming = await cached(`fd:${code}:agendados`, 30 * 60_000, () => fetchJson(`${base}?status=SCHEDULED,TIMED`, 12000, headers));
+    const next = parseMatches(upcoming, time).slice(0, 3);
+    const past = games.filter((g) => g.status !== 'agendado').slice(-4);
+    if (past.length === 0 && next.length === 0) return { liga: code, time, jogos: [], aviso: 'nao achei jogos desse time nessa liga (confira o nome do time ou se ele joga outra competicao)' };
+    return { liga: code, time, ultimos_jogos: past.map(pick), proximos_jogos: next.map(pick), fonte: 'football-data.org' };
   } catch (err) {
     return { erro: `nao consegui buscar os jogos agora (${err.message})` };
   }
