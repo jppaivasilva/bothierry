@@ -38,3 +38,4 @@ backups/
 agent_traces.jsonl
 agent_memory.json
 reminders.json
+ai_queue.json

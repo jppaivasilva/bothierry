@@ -15,6 +15,8 @@ import { getMainGroupJid, getRecentSenderJids } from '../db.js';
 import { syncAvatars } from '../avatars.js';
 import { sendScheduledMessages } from './dailyMessages.js';
 import { registerMessageHandler } from './messageHandler.js';
+import { installReliableSend, setLiveSocketProbe } from './reliableSend.js';
+import { aiQueue } from './aiJobs.js';
 
 // Estado da conexao com o WhatsApp, lido pela rota publica /health (monitor externo de queda).
 export const waState = { connected: false, since: Date.now(), loggedOut: false };
@@ -50,6 +52,9 @@ function archiveLoggedOutSession() {
   }
 }
 
+// Todo envio do bot usa o socket que estiver CONECTADO na hora (e espera reconectar se nao houver nenhum).
+setLiveSocketProbe(() => (waState.connected ? botState.sock : null));
+
 export async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState('auth_info');
 
@@ -68,6 +73,8 @@ export async function startBot() {
     syncFullHistory: false,
     shouldSyncHistoryMessage: () => false,
   });
+
+  installReliableSend(sock); // fila + reenvio automatico em todo sock.sendMessage
 
   sock.ev.on('connection.update', (update) => {
     const { connection, lastDisconnect, qr } = update;
@@ -104,6 +111,7 @@ export async function startBot() {
       console.log('✅ Conectado ao WhatsApp! Ouvindo mensagens dos grupos...');
       recordConnectionEvent('connected');
       botState.sock = sock;
+      aiQueue.start(); // retoma as perguntas que ficaram pendentes (queda/reinicio)
       setBotJids([normalizeJid(sock.user?.id), normalizeJid(sock.user?.lid), ...[sock.user?.id, sock.user?.lid].filter(Boolean).map(jidNormalizedUser)]);
       // Se o bot esteve desligado no horario do aviso diario, verifica agora
       // (so nesse "catch-up" pra nao mandar aniversario de madrugada).

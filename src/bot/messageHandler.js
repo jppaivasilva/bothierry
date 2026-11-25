@@ -12,8 +12,9 @@ import { parseCommand, commands } from './commands.js';
 import { sendAudioByName } from './audioCommands.js';
 import { jidNormalizedUser } from '@whiskeysockets/baileys';
 import { isOnBotChatCooldown, getQuotedMessage, getRecentConversation } from './botConversation.js';
-import { answerDataQuestion } from '../dataQuestions.js';
-import { getImageForBot } from './vision.js';
+import { findImageMedia } from './vision.js';
+import { aiQueue, minimalQuote } from './aiJobs.js';
+import { TEXTS } from './aiQueue.js';
 
 // Janela de tempo em que um link repetido e avisado pelo bot.
 const LINK_REPEAT_WINDOW_HOURS = 24;
@@ -253,18 +254,18 @@ sock.ev.on('messages.upsert', async ({ messages, type }) => {
               if (question && (isBotMentioned || replyLetters >= 8)) {
                 debugLog(`[debug] pergunta de dados detectada: "${question}"`);
                 try {
-                  const image = await getImageForBot(msg);
-                  const answer = await answerDataQuestion(client, groupJid, question, {
-                    image,
-                    context: getRecentConversation(groupJid, text),
-                    quoted: quotedMessage,
-                    asker: senderName,
-                    askerJid: senderJid,
-                  });
-                  const sent = await sock.sendMessage(groupJid, { text: answer }, { quoted: msg }); // reply na mensagem que chamou o bot
-                  if (sent?.key?.id) sentByBot.add(sent.key.id);
+                  // Vai pra fila: o handler nao espera a IA (nao trava as proximas mensagens) e a resposta e garantida
+                  // (reenvio se o WhatsApp cair, reaproveita se o bot reiniciar). Ver src/bot/aiQueue.js.
+                  const queued = aiQueue.enqueue(
+                    { id: msgId, groupJid, senderJid, senderName, question, text, quotedCtx: quotedMessage, hadImage: !!findImageMedia(msg), quote: minimalQuote(msg) },
+                    { msg },
+                  );
+                  if (!queued.ok && queued.reason !== 'duplicada') {
+                    const sent = await sock.sendMessage(groupJid, { text: queued.reason === 'limite_pessoa' ? TEXTS.userLimit : TEXTS.full }, { quoted: msg });
+                    if (sent?.key?.id) sentByBot.add(sent.key.id);
+                  }
                 } catch (err) {
-                  console.error('Erro ao responder pergunta de dados:', err);
+                  console.error('Erro ao colocar a pergunta na fila:', err);
                 }
               }
             }
