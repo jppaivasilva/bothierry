@@ -37,3 +37,4 @@ news_sent.json
 backups/
 agent_traces.jsonl
 agent_memory.json
+reminders.json
