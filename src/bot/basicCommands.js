@@ -1,5 +1,6 @@
 // Comandos simples do grupo: ranking, resumo, transcrever, figurinha, renomear, foto do grupo, otario, regras, painel...
 
+import { PERSONA } from '../persona.js';
 import { getBrasiliaNow, formatDateBR, DASHBOARD_URL, getOpenAIClient, MAX_TRANSCRIPT_CHARS, OPENAI_MODEL, getSharp, findImageAsset, REGULAMENTO_FILE, MEGASENA_FILE, sentByBot } from './shared.js';
 import { getDailyCounts, getMessagesSince } from '../db.js';
 import { formatDisplayName } from '../displayNames.js';
@@ -14,7 +15,7 @@ export async function commandRanking({ sock, groupJid }) {
   const counts = getDailyCounts(groupJid, today);
 
   if (counts.length === 0) {
-    return sock.sendMessage(groupJid, { text: 'Ainda nao ha mensagens registradas hoje.' });
+    return sock.sendMessage(groupJid, { text: 'Hoje ainda tá todo mundo quieto, não tenho nenhuma mensagem registrada 😴' });
   }
 
   const totalMessages = counts.reduce((sum, c) => sum + c.total, 0);
@@ -36,7 +37,7 @@ export async function commandResumo({ sock, groupJid }) {
   const client = getOpenAIClient();
   if (!client) {
     return sock.sendMessage(groupJid, {
-      text: 'O !resumo precisa de uma chave da OpenAI configurada. Crie um arquivo .env na raiz do projeto com OPENAI_API_KEY=sua-chave e reinicie o bot.',
+      text: 'Pra fazer o !resumo eu preciso da chave da OpenAI configurada. Crie um arquivo .env na raiz do projeto com OPENAI_API_KEY=sua-chave e reinicie o bot.',
     });
   }
 
@@ -44,7 +45,7 @@ export async function commandResumo({ sock, groupJid }) {
   const recentMessages = getMessagesSince(groupJid, since);
 
   if (recentMessages.length === 0) {
-    return sock.sendMessage(groupJid, { text: 'Ainda não há mensagens de texto suficientes nas últimas 24h pra resumir.' });
+    return sock.sendMessage(groupJid, { text: 'Não rolou conversa suficiente nas últimas 24h pra eu resumir 🤷' });
   }
 
   const transcript = recentMessages
@@ -59,7 +60,7 @@ export async function commandResumo({ sock, groupJid }) {
         {
           role: 'system',
           content:
-            'Voce resume conversas de um grupo de WhatsApp em portugues do Brasil. Responda em no maximo 10 bullet points, bem curtos e objetivos, so os pontos principais. Nao invente informacao que nao esteja na conversa.',
+            PERSONA + ' Agora voce vai contar pro grupo o que rolou nas ultimas 24 horas. Comece com UMA frase curta e descontraida em primeira pessoa (ex.: "Olha o que eu vi por aqui:"), depois no maximo 10 bullet points curtos e objetivos, so os pontos principais, no mesmo tom. Nao invente informacao que nao esteja na conversa.',
         },
         { role: 'user', content: `Resuma esta conversa das ultimas 24 horas:\n\n${transcript}` },
       ],
@@ -70,7 +71,7 @@ export async function commandResumo({ sock, groupJid }) {
     return sock.sendMessage(groupJid, { text: `🧠 Resumo das últimas 24h:\n\n${summary}` });
   } catch (err) {
     console.error('Erro ao gerar resumo com OpenAI:', err);
-    return sock.sendMessage(groupJid, { text: 'Não consegui gerar o resumo agora, tenta de novo daqui a pouco.' });
+    return sock.sendMessage(groupJid, { text: 'Deu ruim aqui na hora de resumir 😅 tenta de novo daqui a pouco.' });
   }
 }
 
@@ -96,7 +97,7 @@ export async function commandTranscrever({ sock, groupJid, msg }) {
   const client = getOpenAIClient();
   if (!client) {
     return sock.sendMessage(groupJid, {
-      text: 'O !transcrever precisa de uma chave da OpenAI configurada. Crie um arquivo .env na raiz do projeto com OPENAI_API_KEY=sua-chave e reinicie o bot.',
+      text: 'Pra fazer o !transcrever eu preciso da chave da OpenAI configurada. Crie um arquivo .env na raiz do projeto com OPENAI_API_KEY=sua-chave e reinicie o bot.',
     });
   }
 
@@ -121,7 +122,7 @@ export async function commandTranscrever({ sock, groupJid, msg }) {
     });
   } catch (err) {
     console.error('Erro ao transcrever áudio:', err);
-    return sock.sendMessage(groupJid, { text: 'Não consegui transcrever esse áudio, tenta de novo daqui a pouco.' });
+    return sock.sendMessage(groupJid, { text: 'Não consegui transcrever esse áudio 😅 tenta de novo daqui a pouco.' });
   }
 }
 
@@ -154,11 +155,11 @@ export async function commandRenomearGrupo({ sock, groupJid, args }) {
 
   try {
     await sock.groupUpdateSubject(groupJid, newName);
-    return sock.sendMessage(groupJid, { text: `✅ Nome do grupo atualizado para: *${newName}*` });
+    return sock.sendMessage(groupJid, { text: `✅ Pronto, renomeei o grupo para: *${newName}*` });
   } catch (err) {
     console.error('Erro ao renomear grupo:', err);
     return sock.sendMessage(groupJid, {
-      text: 'Não consegui renomear o grupo — confere se o número do bot é admin do grupo (isso é uma exigência do WhatsApp).',
+      text: 'Não consegui renomear o grupo — confere se eu sou admin (o WhatsApp exige isso pra eu mexer no nome).',
     });
   }
 }
@@ -175,11 +176,11 @@ export async function commandFotoGrupo({ sock, groupJid, msg }) {
     const jpegBuffer = await sharp(buffer).resize(640, 640, { fit: 'cover' }).jpeg().toBuffer();
 
     await sock.updateProfilePicture(groupJid, jpegBuffer);
-    return sock.sendMessage(groupJid, { text: '✅ Foto do grupo atualizada!' });
+    return sock.sendMessage(groupJid, { text: '✅ Pronto, troquei a foto do grupo!' });
   } catch (err) {
     console.error('Erro ao trocar foto do grupo:', err);
     return sock.sendMessage(groupJid, {
-      text: 'Não consegui trocar a foto do grupo — confere se o número do bot é admin do grupo (isso é uma exigência do WhatsApp).',
+      text: 'Não consegui trocar a foto do grupo — confere se eu sou admin (o WhatsApp exige isso pra eu mexer na foto).',
     });
   }
 }

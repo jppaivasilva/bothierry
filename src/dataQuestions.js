@@ -1,3 +1,4 @@
+import { PERSONA } from './persona.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -337,6 +338,7 @@ function getReferenceDates() {
 function buildSystemPrompt() {
   const ref = getReferenceDates();
   return (
+    PERSONA + ' ' +
     `Datas de referencia (ja calculadas, horario de Brasilia — use estas exatamente, nunca calcule voce mesmo): ` +
     `hoje = ${ref.hoje}; ontem = ${ref.ontem}; inicio desta semana (segunda-feira) = ${ref.inicio_desta_semana}; ` +
     `7 dias atras = ${ref.sete_dias_atras}; inicio deste mes = ${ref.inicio_deste_mes}. ` +
@@ -351,8 +353,8 @@ function buildSystemPrompt() {
     'e sobre quem e o dono de um apelido, em portugues do Brasil, SOMENTE usando as funcoes disponiveis (contar_top3, ' +
     'total_mensagens, ranking_periodo, listar_mensagens, quem_e). Se a pergunta pedir algo que nenhuma dessas funcoes calcula ' +
     '(ex: sentimento/analise subjetiva do conteudo, resumo, previsao, qualquer coisa fora de contagem/ranking/listagem de ' +
-    'mensagens ou identificar apelido), responda diretamente (sem chamar funcao) com uma frase curta dizendo que ainda nao esta ' +
-    'preparado pra esse tipo de pergunta. ' +
+    'mensagens ou identificar apelido), responda diretamente (sem chamar funcao), em primeira pessoa e com bom humor, dizendo que essa ' +
+    'voce ainda nao sabe responder. ' +
     'Quando a pergunta for "quem e o/a <apelido>", chame quem_e e responda so com o PRIMEIRO NOME da pessoa (o campo ' +
     'primeiro_nome do resultado), numa frase curta — nao repita o apelido nem de nomes completos. Se quem_e nao encontrar o ' +
     'apelido, diga que nao tem esse apelido cadastrado. ' +
@@ -404,7 +406,7 @@ export async function answerDataQuestion(client, groupJid, question, { context =
   const toolCalls = choice.message.tool_calls;
 
   if (!toolCalls || toolCalls.length === 0) {
-    return choice.message.content?.trim() || 'Ainda não estou preparado pra esse tipo de pergunta.';
+    return choice.message.content?.trim() || 'Ih, essa eu ainda não sei responder 😅 Por enquanto eu entendo de contagem, ranking, o que cada um falou e o que rolou na conversa.';
   }
 
   messages.push(choice.message);
@@ -429,5 +431,5 @@ export async function answerDataQuestion(client, groupJid, question, { context =
     max_tokens: 3000,
   });
 
-  return second.choices[0]?.message?.content?.trim() || 'Não consegui montar uma resposta com esses dados.';
+  return second.choices[0]?.message?.content?.trim() || 'Travei aqui e não consegui montar uma resposta com esses dados 😵 tenta de novo?';
 }

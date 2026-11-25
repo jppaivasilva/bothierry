@@ -90,7 +90,7 @@ export async function sendWeeklySummary(sock, onlyGroupJid = null) {
     try {
       const summary = getWindowSummary(groupJid, sinceTs, untilTs);
       if (!summary) {
-        if (onlyGroupJid) await sock.sendMessage(groupJid, { text: 'Ninguém falou nos últimos 7 dias, não tem o que resumir.' });
+        if (onlyGroupJid) await sock.sendMessage(groupJid, { text: 'Ninguém falou nos últimos 7 dias, não tenho o que resumir 😶' });
         continue;
       }
       let image = null;

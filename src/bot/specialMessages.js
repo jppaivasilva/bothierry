@@ -22,7 +22,7 @@ export async function sendWordCloudToGroup(sock, groupJid, { force = false } = {
   const { date } = getBrasiliaNow();
   const cloud = buildWordCloud(getTextsForDate(groupJid, date), 60);
   if (cloud.words.length < 5) {
-    if (force) await sock.sendMessage(groupJid, { text: 'Poucas palavras hoje pra montar uma nuvem.' });
+    if (force) await sock.sendMessage(groupJid, { text: 'Hoje teve pouca conversa, não deu pra eu montar uma nuvem de palavras 😅' });
     return;
   }
   const image = renderWordCloudCard(cloud.words, date, cloud.totalMessages);

@@ -19,7 +19,7 @@ async function commandMenu({ sock, groupJid }) {
     const commandLines = cat.commands.map((c) => `!${c.name} — ${c.description}`).join('\n');
     return `${cat.emoji} *${cat.title}*\n${commandLines}`;
   });
-  return sock.sendMessage(groupJid, { text: `🤖 *Menu de Comandos disponíveis*\n\n${blocks.join('\n\n')}` });
+  return sock.sendMessage(groupJid, { text: `🤖 *Olha o que eu sei fazer* (é só mandar o comando):\n\n${blocks.join('\n\n')}` });
 }
 
 // Categorias exibidas pelo !menu. Ao adicionar um comando novo, inclua ele

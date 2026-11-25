@@ -183,6 +183,7 @@ Tudo em `src/` (JavaScript, módulos ES):
 | `birthdayLinks.js` | De/para aniversariante → membro do grupo (foto do cartão e da lista): ligação manual do painel, ou automática por nome/apelido (`apelidos.txt`) quando só uma pessoa bate; sugere candidatos nos demais |
 | `scheduled.js` | Mensagens agendadas pontuais (`scheduled_messages.json`) |
 | `rules.js` | Regras do grupo (`regras/*.txt`) |
+| `persona.js` | A **voz do Bothierry** (primeira pessoa, descontraído, amigo do grupo), usada nos prompts da IA (perguntas, `!resumo`). As frases fixas do bot seguem o mesmo tom — ao escrever uma nova, fale como "eu" |
 | `dataQuestions.js` | Perguntas sobre dados do grupo via `@Bothierry` + IA. Quando falam com o bot (marcando ou **respondendo a uma mensagem dele**, no máximo 1 vez a cada 15 s por pessoa; resposta sem marcar só vira conversa com IA a partir de 8 letras, e se for xingamento o bot devolve "teu cu" sem contar para a expulsão — o insulto *com marcação* continua no fluxo de avisos/expulsão), a IA também recebe as últimas 25 mensagens do grupo (até 3 h) e a mensagem respondida, pra entender referências como "ele" ou "isso" (`BOT_CONTEXT_*` em `index.js`) |
 | `groupPhoto.js` | Foto do grupo/bot editada por IA |
 | `avatars.js` | Cache de fotos de perfil dos membros |
