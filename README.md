@@ -361,7 +361,9 @@ Use `!` ou `/` no começo. `!menu` lista tudo no próprio WhatsApp (e a aba **Co
 | `!resumosemanal` *(oculto)* | manda o resumo semanal (cartão) só no grupo onde for digitado |
 | `!testaraniversario [nome]` *(oculto)* | manda o cartão de aniversário só no grupo onde for digitado (do nome informado, ou do próximo aniversariante) |
 
-**Perguntar dados do grupo:** mencione **@Bothierry** com uma pergunta ("quantas vezes o Fulano ficou no top 3?"). A IA só escolhe entre consultas reais nos dados, nunca inventa. Apelidos em `apelidos.txt` (`Nome Completo;apelido1;apelido2`).
+**Perguntar dados do grupo:** mencione **@Bothierry** com uma pergunta ("quantas vezes o Fulano ficou no top 3?"). A IA só escolhe entre consultas reais nos dados, nunca inventa.
+
+**Conversa livre + dados ao vivo:** marcado ou respondido, o bot também bate papo sobre qualquer assunto (no tom da persona). Pra informação que muda toda hora a IA chama funções de `src/liveData.js` e responde só com o que elas devolveram (com horário): `cotacao` (Yahoo Finance: dólar, euro, bitcoin, Ibovespa, S&P, ouro, ações como PETR4/AAPL), `previsao_tempo` (Open-Meteo, qualquer cidade, até 5 dias) e `noticias` (IGN Brasil/Canaltech pra games, G1 pra geral). Há cache curto (1 min cotações, 10 min tempo) e timeout de 9 s; se a fonte falhar a função devolve `{erro}` e o bot diz que não conseguiu buscar. Previsão de mercado/jogo não existe — ele diz isso. Placares de futebol ainda não têm fonte: a ESPN bloqueia clientes que se identificam como bot, então a decisão da fonte (ex.: football-data.org com chave) fica pendente. Apelidos em `apelidos.txt` (`Nome Completo;apelido1;apelido2`).
 
 ---
 

@@ -343,5 +343,10 @@
   "pr": 70,
   "titulo": "Bothierry fala em primeira pessoa",
   "resumo": "O tom das respostas do bot muda: pessoal, descontraído e em primeira pessoa (\"eu\"), como um amigo do grupo, e não como \"o bot\". A IA (perguntas, resumo) recebe uma persona fixa e as frases fixas (erros, avisos, menu, nome/foto do grupo) foram reescritas."
+ },
+ {
+  "pr": 71,
+  "titulo": "Conversa livre e dados ao vivo",
+  "resumo": "O Bothierry agora conversa sobre qualquer assunto quando marcado ou respondido, no jeito dele. Pra dados que mudam (cotação de dólar, euro, bitcoin, Ibovespa e ações; previsão do tempo de qualquer cidade; manchetes de games e do G1) ele consulta fontes reais e nunca inventa: se a fonte falhar ele avisa, e previsões de bolsa ou resultados ele não chuta. Placar de futebol ainda não tem fonte liberada."
  }
 ]
