@@ -358,5 +358,10 @@
   "pr": 73,
   "titulo": "Agente com memória",
   "resumo": "O bot agora lembra: memória de curto prazo (as últimas trocas com cada pessoa por ~20 min, pra \"e amanhã?\" funcionar) e de longo prazo (fatos leves que a pessoa conta sobre si ou pede pra anotar, como time e jogo favorito, e fatos do grupo). Regras de privacidade no código: nada de saúde, política, religião, dinheiro, endereço, documentos ou contatos, e nada sobre outra pessoa. Comandos !memoria (ver) e !esquecer (apagar um ou tudo); cada um só apaga o que é seu."
+ },
+ {
+  "pr": 74,
+  "titulo": "Agente pesquisa na web, lê links e traz placares",
+  "resumo": "Novas ferramentas do agente: busca na web (Tavily) pra fatos recentes, leitura do texto de links que alguém mandar, e placares/jogos de futebol (football-data.org: Brasileirão, ligas europeias, Champions, Copa do Mundo). Conteúdo da web é tratado como externo e não confiável (nunca vira instrução), com teto diário de buscas. Precisam das chaves TAVILY_API_KEY e FOOTBALL_DATA_API_KEY no .env; sem elas o bot avisa que não está configurado."
  }
 ]
