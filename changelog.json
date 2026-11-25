@@ -378,5 +378,10 @@
   "pr": 77,
   "titulo": "Futebol: nomes de liga flexíveis e próximos jogos do time",
   "resumo": "Corrige a consulta de futebol: agora entende variações como \"Brasileirão Série A\" ou \"campeonato inglês\" (antes só aceitava o nome exato), e quando perguntam de um time traz os últimos resultados e os próximos jogos de todo o calendário (antes só olhava 3 dias à frente, então \"quando é o próximo jogo do Santos?\" falhava). Copa do Brasil, Libertadores e estaduais seguem fora da fonte gratuita, e o bot avisa."
+ },
+ {
+  "pr": 78,
+  "titulo": "Bot responde em reply",
+  "resumo": "Quando alguém marca o bot (ou responde a uma mensagem dele), a resposta agora vem como reply na mensagem que o chamou, em vez de uma mensagem solta, pra ficar claro a quem ele está respondendo."
  }
 ]

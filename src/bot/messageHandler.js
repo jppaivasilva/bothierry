@@ -261,7 +261,7 @@ sock.ev.on('messages.upsert', async ({ messages, type }) => {
                     asker: senderName,
                     askerJid: senderJid,
                   });
-                  const sent = await sock.sendMessage(groupJid, { text: answer });
+                  const sent = await sock.sendMessage(groupJid, { text: answer }, { quoted: msg }); // reply na mensagem que chamou o bot
                   if (sent?.key?.id) sentByBot.add(sent.key.id);
                 } catch (err) {
                   console.error('Erro ao responder pergunta de dados:', err);
