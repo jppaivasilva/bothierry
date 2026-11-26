@@ -8,6 +8,8 @@
 // em silencio (como no !testarstory antigo) — nenhuma mensagem aparece pro grupo.
 import crypto from 'crypto';
 import { proto, prepareWAMessageMedia, generateMessageIDV2 } from '@whiskeysockets/baileys';
+import { logBotAction } from '../botLog.js';
+import { botState } from './shared.js';
 
 const GROUP_STATUS_ATTRIBUTION = 5; // proto.StatusAttribution.Type.GROUP_STATUS
 const META_NODE = { tag: 'meta', attrs: { is_group_status: 'true', origin: 'group_status' } };
@@ -68,4 +70,25 @@ export async function postGroupStatus(sock, groupJid, { text, image, caption, va
 export async function revokeGroupStatus(sock, groupJid, messageId) {
   const message = proto.Message.fromObject({ protocolMessage: { key: { remoteJid: groupJid, fromMe: true, id: messageId }, type: proto.Message.ProtocolMessage.Type.REVOKE } });
   await sock.relayMessage(groupJid, message, { messageId: generateMessageIDV2(sock.user?.id), additionalAttributes: { edit: '7' }, additionalNodes: [META_NODE] });
+}
+
+/** Quais cartoes saem sozinhos como status de grupo (GROUP_STATUS_AUTO no .env, ex.: previsao). */
+export const autoStatusKinds = () => String(process.env.GROUP_STATUS_AUTO || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+
+/**
+ * Posta um cartao como status de grupo SE o recurso estiver ligado (GROUP_STATUS_ENABLED=1) e esse tipo
+ * estiver em GROUP_STATUS_AUTO (ou force=true, usado em testes manuais do root). Nunca lanca erro: se o
+ * WhatsApp recusar, o cartao normal no chat ja saiu e nada mais e afetado.
+ */
+export async function maybePostAutoStatus(sock, groupJid, kind, { image, caption }, { force = false } = {}) {
+  if (process.env.GROUP_STATUS_ENABLED !== '1' || !image) return null;
+  if (!force && !autoStatusKinds().includes(kind)) return null;
+  try {
+    const { id } = await postGroupStatus(botState.sock || sock, groupJid, { image, caption });
+    logBotAction({ tipo: 'grupo', resumo: `postei o cartao de ${kind} como status do grupo` });
+    return id;
+  } catch (err) {
+    console.error(`Erro ao postar o status de grupo (${kind}) — o cartao normal ja foi enviado:`, err?.message || err);
+    return null;
+  }
 }

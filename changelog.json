@@ -403,5 +403,10 @@
   "pr": 82,
   "titulo": "Status de grupo: foto",
   "resumo": "O status de grupo em texto funcionou no teste, mas a foto foi \"enviada\" e não apareceu. Causa: o Baileys marca o tipo de mídia olhando só o topo da mensagem, e dentro do embrulho groupStatusMessageV2 esse marcador some (o WhatsApp descarta em silêncio). Agora a foto vai com a imageMessage no topo (com a atribuição de status de grupo, o messageSecret e o nó meta); o texto continua como antes."
+ },
+ {
+  "pr": 83,
+  "titulo": "Previsão do tempo também como status do grupo",
+  "resumo": "Status de grupo com foto confirmado funcionando. O cartão de previsão do bom dia agora pode sair também como status do grupo (GROUP_STATUS_ENABLED=1 e GROUP_STATUS_AUTO=previsao no .env). Se o WhatsApp recusar, o cartão normal no chat já saiu e nada é afetado. Pra testar na hora: !testarbomdia status (só root)."
  }
 ]

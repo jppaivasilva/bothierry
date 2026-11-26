@@ -16,6 +16,8 @@ import { getDueMessages, markScheduledMessageSent } from '../scheduled.js';
 import path from 'path';
 import fs from 'fs';
 import { getAudioMimeType } from './audioCommands.js';
+import { maybePostAutoStatus } from './groupStatus.js';
+import { isRoot } from './root.js';
 
 // Mensagem automatica das 8h, mandada em todos os grupos que o bot participa.
 // So em dia util (o cron ja restringe a segunda-sexta) e fora de feriado nacional.
@@ -23,7 +25,7 @@ import { getAudioMimeType } from './audioCommands.js';
 // legenda. Se a previsao ou a imagem falharem, cai no texto com o bloco de
 // clima (ou so o bom dia, se nem a previsao veio). onlyGroupJid manda so num
 // grupo (usado pelo !testarbomdia).
-export async function sendMorningMessage(sock, onlyGroupJid = null, themeOverride = null) {
+export async function sendMorningMessage(sock, onlyGroupJid = null, themeOverride = null, { forceStatus = false } = {}) {
   const { date: today } = getBrasiliaNow();
   const theme = themeOverride || morningTheme(today);
   const holidayName = await getHolidayName(today);
@@ -58,14 +60,22 @@ export async function sendMorningMessage(sock, onlyGroupJid = null, themeOverrid
     } catch (err) {
       console.error(`Erro ao enviar mensagem de bom dia para ${groupJid}:`, err);
     }
+    // Opcional (GROUP_STATUS_AUTO=previsao): o mesmo cartao tambem como status do grupo. Nos testes
+    // (!testarbomdia) so sai se o root pedir com "status".
+    if (image && (!onlyGroupJid || forceStatus)) {
+      await maybePostAutoStatus(sock, groupJid, 'previsao', { image, caption: `Previsão do tempo — ${diaSemana}` }, { force: forceStatus });
+    }
   }
 }
 
 // !testarbomdia — manda o bom dia so no grupo onde foi digitado (pra ver como fica).
 // "!testarbomdia gtavi" mostra a versao tematica do lancamento do GTA VI.
-export async function commandTestarBomDia({ sock, groupJid, args }) {
-  const theme = String(args ?? '').trim().toLowerCase() === 'gtavi' ? 'gtavi' : null;
-  await sendMorningMessage(sock, groupJid, theme);
+// "!testarbomdia status" (so root) tambem posta o cartao como status do grupo.
+export async function commandTestarBomDia({ sock, groupJid, senderJid, args, msg }) {
+  const words = String(args ?? '').trim().toLowerCase().split(/\s+/);
+  const theme = words.includes('gtavi') ? 'gtavi' : null;
+  const forceStatus = words.includes('status') && isRoot({ senderJid, msg });
+  await sendMorningMessage(sock, groupJid, theme, { forceStatus });
 }
 
 // Resumo semanal: cartao grande (src/weeklyCard.js) com os ultimos 7 dias do
