@@ -1,5 +1,5 @@
 // EXPERIMENTO (desligado por padrao): postar um STATUS DE GRUPO (story do grupo, recurso novo do
-// WhatsApp de 31/10/2026). O Baileys 7.0.0-rc14 conhece o formato (groupStatusMessageV2,
+// WhatsApp de 31/10/2026). TEXTO ja foi testado e funciona; foto: ver buildGroupStatus. O Baileys 7.0.0-rc14 conhece o formato (groupStatusMessageV2,
 // contextInfo.isGroupStatus, StatusAttribution GROUP_STATUS) mas nao tem funcao pronta; montamos a
 // mensagem na mao e mandamos por relayMessage com um no <meta is_group_status origin=group_status>,
 // seguindo o que a comunidade reportou funcionar (Baileys discussion #2318 e issue #2903). Nao ha
@@ -33,12 +33,18 @@ function contextInfoFor(variant, authorJid) {
 export function buildGroupStatus({ content, authorJid, variant = 1, secret = crypto.randomBytes(32) }) {
   if (!VARIANTS[variant]) throw new Error(`variante invalida (use ${Object.keys(VARIANTS).join(', ')})`);
   const contextInfo = contextInfoFor(variant, authorJid);
-  const inner = content.imageMessage
-    ? { imageMessage: { ...content.imageMessage, ...(content.caption ? { caption: content.caption } : {}), contextInfo } }
-    : { extendedTextMessage: { text: content.text, backgroundArgb: 0xff1f6feb, font: 1, contextInfo } };
+  const messageContextInfo = { messageSecret: secret };
+  const additionalNodes = variant === 3 ? [] : [META_NODE];
+  if (content.imageMessage) {
+    // FOTO: a imageMessage fica no TOPO, sem o embrulho groupStatusMessageV2. O Baileys marca o tipo de
+    // midia (mediatype="image") olhando so o topo da mensagem (getMediaType em messages-send.js); dentro do
+    // embrulho o marcador some e o WhatsApp descarta a foto em silencio (foi o que aconteceu no 1o teste).
+    return { message: { imageMessage: { ...content.imageMessage, ...(content.caption ? { caption: content.caption } : {}), contextInfo }, messageContextInfo }, additionalNodes };
+  }
+  // TEXTO: nao tem tipo de midia, entao o embrulho V2 funciona (testado: apareceu no grupo).
   return {
-    message: { groupStatusMessageV2: { message: inner }, messageContextInfo: { messageSecret: secret } },
-    additionalNodes: variant === 3 ? [] : [META_NODE],
+    message: { groupStatusMessageV2: { message: { extendedTextMessage: { text: content.text, backgroundArgb: 0xff1f6feb, font: 1, contextInfo } } }, messageContextInfo },
+    additionalNodes,
   };
 }
 
