@@ -1,5 +1,7 @@
 import { PERSONA } from './persona.js';
 import { LIVE_TOOLS, LIVE_IMPLS } from './liveData.js';
+import { INSULT_TOOLS, historicoInsultos } from './insultHistory.js';
+import { BOT_LOG_TOOLS, acoesDoBot, buildRecentActionsContext } from './botLog.js';
 import { RESEARCH_TOOLS, RESEARCH_IMPLS } from './research.js';
 import { runAgent } from './agent.js';
 import { REMINDER_TOOLS, REMINDER_IMPLS } from './reminders.js';
@@ -299,12 +301,25 @@ const TOOLS = [
     },
   },
   ...LIVE_TOOLS,
+  ...BOT_LOG_TOOLS,
+  ...INSULT_TOOLS,
   ...RESEARCH_TOOLS,
   ...MEMORY_TOOLS,
   ...REMINDER_TOOLS,
 ];
 
 const TOOL_IMPLS = {
+  historico_insultos: (_records, args) =>
+    historicoInsultos(args, (pessoa) => {
+      const r = quemE(null, { apelido: pessoa });
+      return r.encontrado ? [pessoa, r.nome_completo, r.primeiro_nome] : [pessoa];
+    }),
+  // diario do que o bot fez; "guima" vira o nome completo pelo apelidos.txt antes de procurar
+  acoes_do_bot: (_records, args) =>
+    acoesDoBot(args, (pessoa) => {
+      const r = quemE(null, { apelido: pessoa });
+      return r.encontrado ? [pessoa, r.nome_completo, r.primeiro_nome] : [pessoa];
+    }),
   ...Object.fromEntries(Object.entries(RESEARCH_IMPLS).map(([name, fn]) => [name, (_records, args) => fn(args)])),
   contar_top3: contarTop3,
   total_mensagens: totalMensagens,
@@ -375,12 +390,18 @@ function getCalendarTable(now = new Date()) {
   return { time, days: days.join('; ') };
 }
 
-function buildSystemPrompt(memoryContext = '') {
+function buildSystemPrompt(memoryContext = '', actionsContext = '') {
   const cal = getCalendarTable();
   const ref = getReferenceDates();
   return (
     PERSONA + ' ' +
     MEMORY_RULES + ' ' +
+    (actionsContext ? `O QUE VOCE FEZ E ACONTECEU NO GRUPO RECENTEMENTE (seu diario, e a verdade sobre o que voce mesmo fez — nunca contradiga): ${actionsContext.replace(/\n/g, ' || ')} ` : '') +
+    'Sobre o que voce fez ou o que aconteceu no grupo (avisos, expulsoes, quem saiu/entrou, regras): ANTES de responder, confira o diario acima ' +
+    'e, se precisar de mais, use acoes_do_bot (e historico_insultos pra "quantas vezes ja foi expulso/xingou"); se a pessoa citar alguem por apelido, resolva com quem_e. Voce e quem aplica as regras do grupo ' +
+    '(3 insultos a voce = expulsao automatica), entao fale delas em primeira pessoa ("eu expulsei", "eu avisei"), explicando o MOTIVO real. ' +
+    'Se nao achar registro, diga que nao tem registro disso — NUNCA afirme que algo nao aconteceu so porque nao encontrou, nem faca piada ' +
+    'ignorando a pergunta. ' +
     `LEMBRETES (criar_lembrete, listar_lembretes, cancelar_lembrete): agora sao ${cal.time} (Brasilia). Dias: ${cal.days}. Pra "daqui X" use em_minutos; ` +
     'pra um dia/hora use data (copiada da tabela) + hora. Se a pessoa nao disse o horario, pergunte. O lembrete aparece no GRUPO (todo mundo ve), entao ' +
     'se o assunto parecer intimo, avise isso antes. Depois de criar, confirme dizendo quando voce vai avisar (campo quando). ' +
@@ -454,7 +475,7 @@ export async function answerDataQuestion(client, groupJid, question, { context =
   const ctx = { groupJid, askerJid, askerName: asker };
   const history = askerJid ? getThreadMessages(groupJid, askerJid) : [];
   const messages = [
-    { role: 'system', content: buildSystemPrompt(askerJid ? buildMemoryContext({ jid: askerJid, nome: asker }) : '') },
+    { role: 'system', content: buildSystemPrompt(askerJid ? buildMemoryContext({ jid: askerJid, nome: asker }) : '', buildRecentActionsContext()) },
     ...history,
     { role: 'user', content: image ? [{ type: 'text', text: userContent }, { type: 'image_url', image_url: { url: image, detail: 'auto' } }] : userContent },
   ];

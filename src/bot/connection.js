@@ -17,6 +17,7 @@ import { sendScheduledMessages } from './dailyMessages.js';
 import { registerMessageHandler } from './messageHandler.js';
 import { installReliableSend, setLiveSocketProbe } from './reliableSend.js';
 import { aiQueue } from './aiJobs.js';
+import { recordParticipantsUpdate } from './groupEvents.js';
 
 // Estado da conexao com o WhatsApp, lido pela rota publica /health (monitor externo de queda).
 export const waState = { connected: false, since: Date.now(), loggedOut: false };
@@ -140,6 +141,15 @@ export async function startBot() {
   });
 
   sock.ev.on('creds.update', saveCreds);
+
+  // Quem entra/sai/e removido do grupo vira registro no diario do bot (o agente consulta depois).
+  sock.ev.on('group-participants.update', (update) => {
+    try {
+      recordParticipantsUpdate(update);
+    } catch (err) {
+      console.error('Erro ao registrar entrada/saida do grupo:', err);
+    }
+  });
 
   sock.ev.on('groups.update', (updates) => {
     for (const update of updates) {

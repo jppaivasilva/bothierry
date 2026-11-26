@@ -139,7 +139,7 @@ sock.ev.on('messages.upsert', async ({ messages, type }) => {
       const brokenRule = findMatchingRule(text);
       if (brokenRule) {
         try {
-          await announceRuleBreak(sock, groupJid, brokenRule);
+          await announceRuleBreak(sock, groupJid, brokenRule, { jid: senderJid, name: senderName });
         } catch (err) {
           console.error(`Erro ao avisar regra ${brokenRule.number}:`, err);
         }
@@ -149,7 +149,7 @@ sock.ev.on('messages.upsert', async ({ messages, type }) => {
         try {
           if (await isIphoneDepreciative(text)) {
             const rule93 = loadRules().find((r) => r.number === IPHONE_RULE_NUMBER);
-            if (rule93) await announceRuleBreak(sock, groupJid, rule93);
+            if (rule93) await announceRuleBreak(sock, groupJid, rule93, { jid: senderJid, name: senderName });
           }
         } catch (err) {
           console.error('Erro ao analisar mensagem sobre iPhone via IA:', err);
@@ -236,7 +236,7 @@ sock.ev.on('messages.upsert', async ({ messages, type }) => {
             debugLog(`[debug] insulto ao bot detectado de ${senderName}`);
             try {
               if (isBotMentioned) {
-                await handleBotInsult({ sock, groupJid, senderJid, senderName });
+                await handleBotInsult({ sock, groupJid, senderJid, senderName, text: botText });
               } else {
                 // Xingou respondendo a uma mensagem do bot (sem marcar): so devolve a ofensa, sem contar pra expulsao.
                 const sent = await sock.sendMessage(groupJid, { text: 'teu cu' }, { quoted: msg });

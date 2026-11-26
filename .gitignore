@@ -39,3 +39,5 @@ agent_traces.jsonl
 agent_memory.json
 reminders.json
 ai_queue.json
+bot_actions.jsonl
+insult_history.json
