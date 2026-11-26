@@ -398,5 +398,10 @@
   "pr": 81,
   "titulo": "Teste de status de grupo (só root, desligado)",
   "resumo": "Experimento pra postar um status de grupo (o story do grupo, recurso novo do WhatsApp) com o Baileys rc14, seguindo a receita que a comunidade reportou: mensagem groupStatusMessageV2 com atribuição GROUP_STATUS, messageSecret e o nó meta enviado por relayMessage. Comando !statusgrupo (texto, ou respondendo a uma foto) com 3 variantes pra descobrir qual peça o WhatsApp exige, e !statusgrupo apagar. Fica desligado por padrão (GROUP_STATUS_ENABLED=1) e só o root usa (a própria conta do bot ou números em ROOT_NUMBERS). Sem confirmação oficial: se o formato estiver errado o esperado é o WhatsApp ignorar em silêncio."
+ },
+ {
+  "pr": 82,
+  "titulo": "Status de grupo: foto",
+  "resumo": "O status de grupo em texto funcionou no teste, mas a foto foi \"enviada\" e não apareceu. Causa: o Baileys marca o tipo de mídia olhando só o topo da mensagem, e dentro do embrulho groupStatusMessageV2 esse marcador some (o WhatsApp descarta em silêncio). Agora a foto vai com a imageMessage no topo (com a atribuição de status de grupo, o messageSecret e o nó meta); o texto continua como antes."
  }
 ]

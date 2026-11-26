@@ -34,12 +34,32 @@ test('variantes 2 e 3 removem uma peca cada (pra descobrir qual o WhatsApp exige
   assert.equal(Object.keys(VARIANTS).length, 3);
 });
 
-test('imagem: legenda e contextInfo vao dentro da imageMessage', () => {
-  const { message } = buildGroupStatus({ content: { imageMessage: { url: 'u', mimetype: 'image/jpeg' }, caption: 'legenda' }, authorJid: AUTHOR, secret });
-  const img = message.groupStatusMessageV2.message.imageMessage;
+test('foto: imageMessage fica no TOPO (sem embrulho V2), senao o Baileys perde o mediatype e o WhatsApp descarta', () => {
+  const { message, additionalNodes } = buildGroupStatus({ content: { imageMessage: { url: 'u', mimetype: 'image/jpeg' }, caption: 'legenda' }, authorJid: AUTHOR, secret });
+  assert.equal(message.groupStatusMessageV2, undefined);
+  const img = message.imageMessage;
   assert.equal(img.caption, 'legenda');
-  assert.equal(img.contextInfo.isGroupStatus, true);
   assert.equal(img.url, 'u');
+  assert.equal(img.contextInfo.isGroupStatus, true);
+  assert.deepEqual(img.contextInfo.statusAttributions, [{ type: 5, groupStatus: { authorJid: AUTHOR } }]);
+  assert.equal(message.messageContextInfo.messageSecret, secret);
+  assert.equal(additionalNodes.length, 1);
+  assert.equal(buildGroupStatus({ content: { imageMessage: {} }, authorJid: AUTHOR, variant: 3, secret }).additionalNodes.length, 0);
+  assert.equal(buildGroupStatus({ content: { imageMessage: {} }, authorJid: AUTHOR, variant: 2, secret }).message.imageMessage.contextInfo.statusAttributions, undefined);
+});
+
+test('foto: o Baileys enxerga o tipo de midia no topo da mensagem relayada', async () => {
+  const calls = [];
+  const sock = {
+    user: { id: '5511999:12@s.whatsapp.net' },
+    waUploadToServer: async () => ({ mediaUrl: 'https://x/y', directPath: '/d' }),
+    relayMessage: async (...a) => calls.push(a),
+  };
+  // sem rede: prepareWAMessageMedia real faria upload; aqui so conferimos o formato com um imageMessage ja pronto
+  const { message } = buildGroupStatus({ content: { imageMessage: { url: 'u' } }, authorJid: AUTHOR, secret });
+  await sock.relayMessage('g@g.us', proto.Message.fromObject(message), { messageId: 'X', additionalNodes: [] });
+  assert.ok(calls[0][1].imageMessage, 'mediatype=image sera marcado (getMediaType le message.imageMessage)');
+  assert.equal(calls[0][1].groupStatusMessageV2, null);
 });
 
 test('a mensagem montada e um protobuf valido do Baileys (codifica e decodifica sem perder os campos)', () => {
