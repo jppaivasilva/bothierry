@@ -408,5 +408,10 @@
   "pr": 83,
   "titulo": "Previsão do tempo também como status do grupo",
   "resumo": "Status de grupo com foto confirmado funcionando. O cartão de previsão do bom dia agora pode sair também como status do grupo (GROUP_STATUS_ENABLED=1 e GROUP_STATUS_AUTO=previsao no .env). Se o WhatsApp recusar, o cartão normal no chat já saiu e nada é afetado. Pra testar na hora: !testarbomdia status (só root)."
+ },
+ {
+  "pr": 84,
+  "titulo": "!statusgrupo e status automáticos em produção",
+  "resumo": "Status de grupo (o story do grupo) agora é um recurso normal: !statusgrupo texto posta um status de texto, e respondendo a uma foto com !statusgrupo a foto vira status; !statusgrupo apagar remove o seu último (o root remove o de qualquer um). Qualquer membro usa, 1 vez a cada 5 min por pessoa, até 300 caracteres. Os cartões de previsão do tempo (bom dia) e de aniversário também saem sozinhos como status do grupo. Ligado por padrão; GROUP_STATUS_ENABLED=0 desliga, STATUS_GRUPO_ONLY_ROOT=1 restringe o comando ao root e GROUP_STATUS_AUTO troca a lista de cartões automáticos."
  }
 ]
