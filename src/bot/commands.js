@@ -9,6 +9,7 @@ import { commandTestarBomDia, commandResumoSemanal } from './dailyMessages.js';
 import { commandAudios, commandSalvarAudio } from './audioCommands.js';
 import { commandMemoria, commandEsquecer, commandInsultos } from './memoryCommands.js';
 import { commandLembretes, commandCancelarLembrete } from './reminderFlow.js';
+import { commandStatusGrupo } from './statusCommands.js';
 
 // Reconhece tanto "!comando" quanto "/comando" como prefixo de comando.
 export function parseCommand(text) {
@@ -118,6 +119,7 @@ export const commands = {
   regulamento: commandRegulamento,
   lembretes: commandLembretes,
   cancelar: commandCancelarLembrete,
+  statusgrupo: commandStatusGrupo, // experimento, so root (nao aparece no !menu)
   insultos: commandInsultos,
   memoria: commandMemoria,
   esquecer: commandEsquecer,

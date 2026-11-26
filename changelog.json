@@ -393,5 +393,10 @@
   "pr": 80,
   "titulo": "Bot lembra o que ele mesmo fez + histórico de insultos",
   "resumo": "O bot agora tem um diário das próprias ações: avisos e expulsões por insulto (com o que a pessoa disse), regras avisadas e quem entrou, saiu ou foi removido do grupo. O diário das últimas 72 h vai sempre no prompt e a IA pode consultar o resto, então \"por que você tirou o Fulano?\" é respondido com o motivo real (e sem registro ele diz que não tem registro, em vez de negar). Também há um histórico permanente de insultos e expulsões por pessoa: comando !insultos (quadro), consulta pelo agente (inclusive por apelido) e um cartão no perfil do painel."
+ },
+ {
+  "pr": 81,
+  "titulo": "Teste de status de grupo (só root, desligado)",
+  "resumo": "Experimento pra postar um status de grupo (o story do grupo, recurso novo do WhatsApp) com o Baileys rc14, seguindo a receita que a comunidade reportou: mensagem groupStatusMessageV2 com atribuição GROUP_STATUS, messageSecret e o nó meta enviado por relayMessage. Comando !statusgrupo (texto, ou respondendo a uma foto) com 3 variantes pra descobrir qual peça o WhatsApp exige, e !statusgrupo apagar. Fica desligado por padrão (GROUP_STATUS_ENABLED=1) e só o root usa (a própria conta do bot ou números em ROOT_NUMBERS). Sem confirmação oficial: se o formato estiver errado o esperado é o WhatsApp ignorar em silêncio."
  }
 ]
