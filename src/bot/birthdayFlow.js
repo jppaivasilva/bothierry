@@ -9,6 +9,7 @@ import fs from 'fs';
 import { getAvatarPath } from '../avatars.js';
 import { readMemberPhoto, readBirthdayPhoto } from '../birthdayPhotos.js';
 import { photoToDataUri, renderBirthdayCard } from '../birthdayCard.js';
+import { maybePostAutoStatus } from './groupStatus.js';
 
 // Membros do grupo principal (pra achar o nome de exibicao de cada aniversariante).
 function getBirthdayMembers() {
@@ -230,6 +231,9 @@ async function sendBirthdayToGroup(sock, groupJid, rawPeople, { setGroupPhoto = 
   }
   const sent = await sock.sendMessage(groupJid, image ? { image, caption } : { text: caption });
   if (sent?.key?.id) sentByBot.add(sent.key.id);
+
+  // O cartao tambem como status do grupo (so no aviso automatico; o !testaraniversario nao posta status).
+  if (setGroupPhoto && image) await maybePostAutoStatus(sock, groupJid, 'aniversario', { image, caption });
 
   if (setGroupPhoto && image) {
     try {

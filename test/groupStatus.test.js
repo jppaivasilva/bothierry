@@ -95,62 +95,112 @@ test('isRoot: so a conta do bot (fromMe) ou numero em ROOT_NUMBERS', () => {
   assert.equal(isRoot({ senderJid: '5511999@s.whatsapp.net', msg: { key: {} } }), false);
 });
 
-test('!statusgrupo: desligado por padrao; so root; mostra ajuda; nao posta sem permissao', async () => {
+function cmdEnv() {
   const out = [];
-  const dms = [];
   const relayed = [];
-  const sock = { user: { id: '1@s' }, sendMessage: async (jid, m) => (jid.endsWith('@g.us') ? out.push(m.text) : dms.push([jid, m.text]), {}), relayMessage: async () => relayed.push(1) };
-  const base = { sock, groupJid: 'g@g.us', senderJid: '5533777@lid', msg: { key: {} } };
+  const sock = { user: { id: '1@s' }, sendMessage: async (jid, m) => (out.push(m.text), {}), relayMessage: async (...a) => relayed.push(a) };
+  return { out, relayed, sock };
+}
+const asUser = (sock, senderJid, extra = {}) => ({ sock, groupJid: 'g@g.us', senderJid, senderName: 'Fulano', msg: { key: {} }, ...extra });
+
+test('!statusgrupo em producao: qualquer membro posta texto; ajuda sem argumentos; texto grande recusado', async () => {
   delete process.env.GROUP_STATUS_ENABLED;
-  await commandStatusGrupo({ ...base, args: 'oi' });
-  assert.match(out[0], /desligado/);
-  process.env.GROUP_STATUS_ENABLED = '1';
-  await commandStatusGrupo({ ...base, args: 'oi' });
-  assert.match(out[1], /só pro root/);
-  assert.match(dms[0][1], /ROOT_NUMBERS=5533777/, 'sem root configurado, manda no PRIVADO o numero a configurar');
-  process.env.ROOT_NUMBERS = '5533777';
-  await commandStatusGrupo({ ...base, args: '' });
-  assert.match(out[2], /Use: \*!statusgrupo/);
+  delete process.env.STATUS_GRUPO_ONLY_ROOT;
+  const { out, relayed, sock } = cmdEnv();
+  await commandStatusGrupo({ ...asUser(sock, '5501@lid'), args: '' });
+  assert.match(out[0], /Pra postar um \*status no grupo\*/);
   assert.equal(relayed.length, 0);
-  await commandStatusGrupo({ ...base, args: '2 oi do teste' });
+  await commandStatusGrupo({ ...asUser(sock, '5501@lid'), args: 'x'.repeat(301) });
+  assert.match(out[1], /grande demais/);
+  await commandStatusGrupo({ ...asUser(sock, '5501@lid'), args: 'bom dia grupo' });
   assert.equal(relayed.length, 1);
-  assert.match(out[3], /variante 2\) enviado/);
-  await commandStatusGrupo({ ...base, args: 'apagar' });
-  assert.equal(relayed.length, 2);
-  delete process.env.ROOT_NUMBERS;
+  assert.equal(relayed[0][1].groupStatusMessageV2.message.extendedTextMessage.text, 'bom dia grupo');
+  assert.match(out[2], /postei no status do grupo/);
+});
+
+test('!statusgrupo: limite de 1 por 5 min por pessoa (root sem limite) e variantes so pro root', async () => {
+  const { out, relayed, sock } = cmdEnv();
+  const user = asUser(sock, '5502@lid');
+  await commandStatusGrupo({ ...user, args: 'primeiro' });
+  await commandStatusGrupo({ ...user, args: 'segundo' });
+  assert.equal(relayed.length, 1);
+  assert.match(out[1], /um status por vez/);
+  await commandStatusGrupo({ ...asUser(sock, '5503@lid'), args: '2 texto de outra pessoa' });
+  assert.match(relayed[1][1].groupStatusMessageV2.message.extendedTextMessage.text, /^2 texto de outra pessoa$/, 'membro comum: o "2" e texto, nao variante');
+  const root = asUser(sock, 'x@s', { msg: { key: { fromMe: true } } });
+  await commandStatusGrupo({ ...root, args: 'a' });
+  await commandStatusGrupo({ ...root, args: '3 b' });
+  assert.equal(relayed.length, 4);
+  assert.equal(relayed[3][2].additionalNodes.length, 0, 'variante 3 (sem no meta) so pro root');
+});
+
+test('!statusgrupo: ligar/desligar e restringir ao root pelo .env', async () => {
+  const { out, relayed, sock } = cmdEnv();
+  process.env.GROUP_STATUS_ENABLED = '0';
+  await commandStatusGrupo({ ...asUser(sock, '5504@lid'), args: 'oi' });
+  assert.match(out[0], /desligado/);
   delete process.env.GROUP_STATUS_ENABLED;
-  for (const f of [process.env.GROUP_STATUS_STATE_FILE, process.env.BOT_ACTIONS_FILE]) fs.rmSync(f, { force: true });
+  process.env.STATUS_GRUPO_ONLY_ROOT = '1';
+  await commandStatusGrupo({ ...asUser(sock, '5504@lid'), args: 'oi' });
+  assert.match(out[1], /só pro root/);
+  assert.equal(relayed.length, 0);
+  delete process.env.STATUS_GRUPO_ONLY_ROOT;
+});
+
+test('!statusgrupo apagar: cada um apaga so o seu; root apaga o ultimo de qualquer um', async () => {
+  const { out, relayed, sock } = cmdEnv();
+  await commandStatusGrupo({ ...asUser(sock, '5510@lid'), args: 'do dez' });
+  await commandStatusGrupo({ ...asUser(sock, '5511@lid'), args: 'do onze' });
+  const n = relayed.length;
+  await commandStatusGrupo({ ...asUser(sock, '5512@lid'), args: 'apagar' });
+  assert.match(out.at(-1), /Não achei nenhum status seu/);
+  assert.equal(relayed.length, n);
+  await commandStatusGrupo({ ...asUser(sock, '5510@lid'), args: 'apagar' });
+  assert.equal(relayed.length, n + 1);
+  assert.equal(relayed.at(-1)[1].protocolMessage.type, proto.Message.ProtocolMessage.Type.REVOKE);
+  assert.equal(relayed.at(-1)[2].additionalAttributes.edit, '7');
+  assert.match(out.at(-1), /apagar o status/);
+  await commandStatusGrupo({ ...asUser(sock, 'r@s', { msg: { key: { fromMe: true } } }), args: 'apagar' });
+  assert.equal(relayed.length, n + 2, 'root apaga o ultimo de qualquer um (o do onze)');
+  fs.rmSync(process.env.GROUP_STATUS_STATE_FILE, { force: true });
 });
 
 // ---------------- cartao automatico (previsao) ----------------
 const { maybePostAutoStatus, autoStatusKinds } = await import('../src/bot/groupStatus.js');
 const sharp = (await import('sharp')).default;
 
-test('status automatico: so com o recurso ligado e o tipo em GROUP_STATUS_AUTO', async () => {
+test('status automatico: previsao e aniversario por padrao; .env troca a lista; GROUP_STATUS_ENABLED=0 desliga', async () => {
   const png = await sharp({ create: { width: 64, height: 64, channels: 3, background: '#3366cc' } }).png().toBuffer();
   const calls = [];
   const sock = { user: { id: '5511999:1@s.whatsapp.net' }, waUploadToServer: async () => ({ mediaUrl: 'https://mmg.whatsapp.net/x', directPath: '/v/x' }), relayMessage: async (...a) => calls.push(a) };
   delete process.env.GROUP_STATUS_ENABLED;
   delete process.env.GROUP_STATUS_AUTO;
-  assert.equal(await maybePostAutoStatus(sock, 'g@g.us', 'previsao', { image: png, caption: 'c' }), null, 'desligado');
-  process.env.GROUP_STATUS_ENABLED = '1';
-  assert.equal(await maybePostAutoStatus(sock, 'g@g.us', 'previsao', { image: png, caption: 'c' }), null, 'tipo nao esta em AUTO');
-  process.env.GROUP_STATUS_AUTO = 'aniversario, Previsao';
-  assert.deepEqual(autoStatusKinds(), ['aniversario', 'previsao']);
+  assert.deepEqual(autoStatusKinds(), ['previsao', 'aniversario'], 'padrao');
   const id = await maybePostAutoStatus(sock, 'g@g.us', 'previsao', { image: png, caption: 'Previsão do tempo — sexta' });
   assert.ok(id);
-  assert.equal(calls.length, 1);
   const img = calls[0][1].imageMessage;
   assert.equal(img.caption, 'Previsão do tempo — sexta');
   assert.equal(img.contextInfo.isGroupStatus, true);
   assert.equal(calls[0][2].additionalNodes[0].attrs.origin, 'group_status');
+  assert.ok(await maybePostAutoStatus(sock, 'g@g.us', 'aniversario', { image: png, caption: 'Hoje é aniversário!' }));
+  assert.equal(await maybePostAutoStatus(sock, 'g@g.us', 'resumo', { image: png, caption: 'x' }), null, 'tipo fora da lista');
   assert.equal(await maybePostAutoStatus(sock, 'g@g.us', 'previsao', { image: null, caption: 'sem imagem' }), null);
+  process.env.GROUP_STATUS_AUTO = 'aniversario';
+  assert.equal(await maybePostAutoStatus(sock, 'g@g.us', 'previsao', { image: png, caption: 'x' }), null, 'lista do .env manda');
+  process.env.GROUP_STATUS_AUTO = '';
+  assert.deepEqual(autoStatusKinds(), [], 'vazio = nenhum');
+  process.env.GROUP_STATUS_AUTO = 'previsao';
+  process.env.GROUP_STATUS_ENABLED = '0';
+  assert.equal(await maybePostAutoStatus(sock, 'g@g.us', 'previsao', { image: png, caption: 'x' }), null, 'desligado');
+  assert.equal(calls.length, 2);
+  delete process.env.GROUP_STATUS_ENABLED;
+  delete process.env.GROUP_STATUS_AUTO;
+  fs.rmSync(process.env.GROUP_STATUS_STATE_FILE, { force: true });
 });
 
 test('status automatico: se o WhatsApp recusar, nao lanca erro (o cartao normal ja saiu)', async () => {
   const png = await sharp({ create: { width: 32, height: 32, channels: 3, background: '#000' } }).png().toBuffer();
   const sock = { user: { id: '5511999:1@s.whatsapp.net' }, waUploadToServer: async () => ({ mediaUrl: 'https://x', directPath: '/y' }), relayMessage: async () => Promise.reject(new Error('Connection Closed')) };
-  process.env.GROUP_STATUS_ENABLED = '1';
   process.env.GROUP_STATUS_AUTO = 'previsao';
   assert.equal(await maybePostAutoStatus(sock, 'g@g.us', 'previsao', { image: png, caption: 'x' }), null);
   assert.ok((await maybePostAutoStatus(sock, 'g@g.us', 'previsao', { image: png, caption: 'x' }, { force: true })) === null);

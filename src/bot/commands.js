@@ -67,6 +67,7 @@ export const COMMAND_CATEGORIES = [
       { name: 'policiafederal', description: 'nota pública de esclarecimento, pra qualquer eventualidade' },
       { name: 'lembretes', description: 'lista seus lembretes (pra criar: "@Bothierry me lembra sexta às 20h de...")' },
       { name: 'cancelar', description: 'cancela um lembrete — !cancelar 12' },
+      { name: 'statusgrupo', description: 'posta um status no grupo: !statusgrupo texto — ou responda uma foto com !statusgrupo' },
       { name: 'insultos', description: 'quadro de quem mais me xingou e quantas vezes foi expulso' },
       { name: 'memoria', description: 'mostra o que eu lembro de você e do grupo' },
       { name: 'esquecer', description: 'apaga uma coisa que anotei de você — !esquecer 12 ou !esquecer tudo' },
@@ -119,7 +120,7 @@ export const commands = {
   regulamento: commandRegulamento,
   lembretes: commandLembretes,
   cancelar: commandCancelarLembrete,
-  statusgrupo: commandStatusGrupo, // experimento, so root (nao aparece no !menu)
+  statusgrupo: commandStatusGrupo,
   insultos: commandInsultos,
   memoria: commandMemoria,
   esquecer: commandEsquecer,
