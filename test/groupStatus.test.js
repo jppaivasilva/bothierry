@@ -121,3 +121,40 @@ test('!statusgrupo: desligado por padrao; so root; mostra ajuda; nao posta sem p
   delete process.env.GROUP_STATUS_ENABLED;
   for (const f of [process.env.GROUP_STATUS_STATE_FILE, process.env.BOT_ACTIONS_FILE]) fs.rmSync(f, { force: true });
 });
+
+// ---------------- cartao automatico (previsao) ----------------
+const { maybePostAutoStatus, autoStatusKinds } = await import('../src/bot/groupStatus.js');
+const sharp = (await import('sharp')).default;
+
+test('status automatico: so com o recurso ligado e o tipo em GROUP_STATUS_AUTO', async () => {
+  const png = await sharp({ create: { width: 64, height: 64, channels: 3, background: '#3366cc' } }).png().toBuffer();
+  const calls = [];
+  const sock = { user: { id: '5511999:1@s.whatsapp.net' }, waUploadToServer: async () => ({ mediaUrl: 'https://mmg.whatsapp.net/x', directPath: '/v/x' }), relayMessage: async (...a) => calls.push(a) };
+  delete process.env.GROUP_STATUS_ENABLED;
+  delete process.env.GROUP_STATUS_AUTO;
+  assert.equal(await maybePostAutoStatus(sock, 'g@g.us', 'previsao', { image: png, caption: 'c' }), null, 'desligado');
+  process.env.GROUP_STATUS_ENABLED = '1';
+  assert.equal(await maybePostAutoStatus(sock, 'g@g.us', 'previsao', { image: png, caption: 'c' }), null, 'tipo nao esta em AUTO');
+  process.env.GROUP_STATUS_AUTO = 'aniversario, Previsao';
+  assert.deepEqual(autoStatusKinds(), ['aniversario', 'previsao']);
+  const id = await maybePostAutoStatus(sock, 'g@g.us', 'previsao', { image: png, caption: 'Previsão do tempo — sexta' });
+  assert.ok(id);
+  assert.equal(calls.length, 1);
+  const img = calls[0][1].imageMessage;
+  assert.equal(img.caption, 'Previsão do tempo — sexta');
+  assert.equal(img.contextInfo.isGroupStatus, true);
+  assert.equal(calls[0][2].additionalNodes[0].attrs.origin, 'group_status');
+  assert.equal(await maybePostAutoStatus(sock, 'g@g.us', 'previsao', { image: null, caption: 'sem imagem' }), null);
+});
+
+test('status automatico: se o WhatsApp recusar, nao lanca erro (o cartao normal ja saiu)', async () => {
+  const png = await sharp({ create: { width: 32, height: 32, channels: 3, background: '#000' } }).png().toBuffer();
+  const sock = { user: { id: '5511999:1@s.whatsapp.net' }, waUploadToServer: async () => ({ mediaUrl: 'https://x', directPath: '/y' }), relayMessage: async () => Promise.reject(new Error('Connection Closed')) };
+  process.env.GROUP_STATUS_ENABLED = '1';
+  process.env.GROUP_STATUS_AUTO = 'previsao';
+  assert.equal(await maybePostAutoStatus(sock, 'g@g.us', 'previsao', { image: png, caption: 'x' }), null);
+  assert.ok((await maybePostAutoStatus(sock, 'g@g.us', 'previsao', { image: png, caption: 'x' }, { force: true })) === null);
+  delete process.env.GROUP_STATUS_ENABLED;
+  delete process.env.GROUP_STATUS_AUTO;
+  fs.rmSync(process.env.BOT_ACTIONS_FILE, { force: true });
+});
