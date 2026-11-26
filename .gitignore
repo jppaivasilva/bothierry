@@ -41,3 +41,4 @@ reminders.json
 ai_queue.json
 bot_actions.jsonl
 insult_history.json
+group_status_state.json
