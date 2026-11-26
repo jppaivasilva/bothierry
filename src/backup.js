@@ -19,7 +19,7 @@ const DATA_PATHS = [
   'messages.jsonl', 'archive', 'birthdays.json', 'birthday_links.json', 'birthday_photos', 'birthday_state.json',
   'member_photos', 'extra_members.json', 'events.json', 'audios', 'regras', 'avatarbot', 'avatars',
   'apelidos.txt', 'regulamento.txt', 'megasena.txt', 'scheduled_messages.json', 'audio_usage.json',
-  'openai_usage.jsonl', 'agent_memory.json', 'reminders.json', 'news_sent.json', 'estreia_state.json', 'group_photo_backup.json', 'group_photo_backups',
+  'openai_usage.jsonl', 'agent_memory.json', 'reminders.json', 'bot_actions.jsonl', 'insult_history.json', 'news_sent.json', 'estreia_state.json', 'group_photo_backup.json', 'group_photo_backups',
   'avatar_state.json', 'insultos_state.json', 'eleicoes_state.json', 'news_state.json', 'metrics.jsonl',
 ];
 

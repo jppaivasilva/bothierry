@@ -388,5 +388,10 @@
   "pr": 79,
   "titulo": "Fila de respostas e envio confiável",
   "resumo": "Corrige respostas que apareciam no painel mas não chegavam ao WhatsApp. Todo envio do bot agora passa por uma fila com intervalo mínimo, espera o WhatsApp reconectar e reenvia sozinho em erro passageiro, sempre pelo socket vivo (antes usava o socket antigo, morto após uma reconexão). As perguntas ao bot entram numa fila durável: no máximo 3 por vez, uma por pessoa, em ordem; se a IA falhar vai uma resposta de contingência, se o envio falhar a resposta pronta é reenviada sem pagar a IA de novo, e se o bot reiniciar as pendentes voltam. Tratadores globais de erro evitam que uma promessa rejeitada derrube o bot. Aba Agente ganhou o painel Fila de respostas."
+ },
+ {
+  "pr": 80,
+  "titulo": "Bot lembra o que ele mesmo fez + histórico de insultos",
+  "resumo": "O bot agora tem um diário das próprias ações: avisos e expulsões por insulto (com o que a pessoa disse), regras avisadas e quem entrou, saiu ou foi removido do grupo. O diário das últimas 72 h vai sempre no prompt e a IA pode consultar o resto, então \"por que você tirou o Fulano?\" é respondido com o motivo real (e sem registro ele diz que não tem registro, em vez de negar). Também há um histórico permanente de insultos e expulsões por pessoa: comando !insultos (quadro), consulta pelo agente (inclusive por apelido) e um cartão no perfil do painel."
  }
 ]

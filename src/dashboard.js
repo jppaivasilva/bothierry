@@ -20,6 +20,7 @@ import { renderWrappedPersonCard } from './wrappedCard.js';
 import { photoToDataUri } from './birthdayCard.js';
 import { getUsageSummary } from './usage.js';
 import { getAgentOverview } from './agent.js';
+import { getInsultStatsByJid } from './insultHistory.js';
 import { getFavicon, FAVICON_TAGS } from './favicon.js';
 import { getAvatarPath } from './avatars.js';
 import { loadEvents, addEvent, deleteEvent, eventTitleExists, addAttendee, addAbsentee } from './events.js';
@@ -1748,7 +1749,7 @@ async function showProfile(jid, name) {
     ['Maior sequência', st ? st.streak + ' dias' : '—', 'falando todo dia'],
     ['Campeão do dia', st ? st.championDays + 'x' : '—', 'dias em 1º lugar'],
     ['Horário favorito', st ? st.peakHour + 'h' : '—', st ? st.favoriteWeekday : ''],
-  ]);
+  ].concat(p.insults ? [['Insultos ao bot', String(p.insults.total_insultos), p.insults.vezes_expulso ? 'expulso ' + p.insults.vezes_expulso + 'x do grupo' : 'nunca foi expulso']] : []));
   const max60 = Math.max(1, ...p.daily.map((d) => d.count));
   html += '<div class="chart-box" style="margin-bottom:20px;"><div class="title">Últimos 60 dias</div><div class="prof-bars" style="margin-top:12px;">' +
     p.daily.map((d) => '<div title="' + fmtD(d.date) + ': ' + d.count + '" style="height:' + Math.max(2, Math.round((d.count / max60) * 90)) + 'px;"></div>').join('') + '</div></div>';
@@ -2837,6 +2838,7 @@ export function startDashboardServer(
       const groupJid = getMainGroupJid();
       const profile = groupJid && jid ? buildProfile(getAllRecordsForGroup(groupJid), jid) : null;
       if (!profile) return sendJson(res, 404, { error: 'sem mensagens dessa pessoa' });
+      profile.insults = getInsultStatsByJid(jid); // historico de insultos ao bot / expulsoes (null se nunca)
       sendJson(res, 200, profile);
     } else if (req.url === '/api/admin/versions' && req.method === 'GET') {
       if (!isAdmin(req)) return sendJson(res, 403, { error: 'só o administrador pode ver isso' });

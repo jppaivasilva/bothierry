@@ -3,17 +3,22 @@
 import { sentByBot, getOpenAIClient, OPENAI_MODEL, ROOT, findImageAsset } from './shared.js';
 import path from 'path';
 import fs from 'fs';
+import { logBotAction, getRecentActions } from '../botLog.js';
+import { recordInsult, recordExpulsion } from '../insultHistory.js';
+import { formatDisplayName } from '../displayNames.js';
 
 // Numero da regra sobre iPhone (regras/93.txt) — usado quando a IA detecta tom
 // depreciativo numa mensagem que cita "iPhone" mas nao bateu nenhuma frase fixa.
 export const IPHONE_RULE_NUMBER = '93';
 
 // Manda o aviso padrao de regra quebrada (mesmo texto usado pro match por frase fixa).
-export async function announceRuleBreak(sock, groupJid, rule) {
+export async function announceRuleBreak(sock, groupJid, rule, culprit = null) {
   const sent = await sock.sendMessage(groupJid, {
     text: `👮 ✋ Pare amigo, essa é a regra ${rule.number} - ${rule.description} ⚖️`,
   });
   if (sent?.key?.id) sentByBot.add(sent.key.id);
+  const nome = culprit?.name ? formatDisplayName(culprit.name) : null;
+  logBotAction({ tipo: 'regra', jid: culprit?.jid, nome, resumo: `avisei ${nome || 'alguem'} da regra ${rule.number} (${rule.description})` });
 }
 
 // Pede pra IA classificar se uma mensagem que cita "iPhone" fala mal dele
@@ -51,7 +56,7 @@ export async function isIphoneDepreciative(text) {
 // Numero de insultos ao bot (pela mesma pessoa) que disparam a expulsao do grupo.
 const INSULT_LIMIT = 3;
 
-const INSULT_STATE_FILE = path.join(ROOT, 'insultos_state.json');
+const INSULT_STATE_FILE = process.env.INSULT_STATE_FILE || path.join(ROOT, 'insultos_state.json');
 
 function loadInsultCounts() {
   if (!fs.existsSync(INSULT_STATE_FILE)) return {};
@@ -112,7 +117,7 @@ function findInsultLogoPath(count) {
  * ameaca expulsao (imagem muda a cada aviso: policia, policia-2, policia-3),
  * no terceiro remove a pessoa do grupo de verdade (bot precisa ser admin).
  */
-export async function handleBotInsult({ sock, groupJid, senderJid, senderName }) {
+export async function handleBotInsult({ sock, groupJid, senderJid, senderName, text = '' }) {
   const counts = loadInsultCounts();
   const count = (counts[senderJid] || 0) + 1;
   counts[senderJid] = count;
@@ -120,22 +125,33 @@ export async function handleBotInsult({ sock, groupJid, senderJid, senderName })
 
   const logoPath = findInsultLogoPath(count);
   const mentionText = `@${senderJid.split('@')[0]}`;
+  const nome = formatDisplayName(senderName || '');
+  recordInsult({ jid: senderJid, nome: senderName, texto: text, strike: count }); // historico permanente
+  const said = String(text || '').replace(/@\d+/g, '').replace(/\s+/g, ' ').trim().slice(0, 140);
 
   if (count < INSULT_LIMIT) {
-    const text = `${mentionText} me respeite, se você me insultar novamente será expulso ⚠️ (${count}/${INSULT_LIMIT})`;
-    const content = logoPath ? { image: { url: logoPath }, caption: text, mentions: [senderJid] } : { text, mentions: [senderJid] };
-    return sock.sendMessage(groupJid, content);
+    const msg = `${mentionText} me respeite, se você me insultar novamente será expulso ⚠️ (${count}/${INSULT_LIMIT})`;
+    const content = logoPath ? { image: { url: logoPath }, caption: msg, mentions: [senderJid] } : { text: msg, mentions: [senderJid] };
+    const sent = await sock.sendMessage(groupJid, content);
+    logBotAction({ tipo: 'aviso_insulto', jid: senderJid, nome, resumo: `dei aviso ${count}/${INSULT_LIMIT} pro ${nome} porque ele me insultou${said ? ` (disse: "${said}")` : ''}; no 3º insulto a pessoa e expulsa do grupo` });
+    return sent;
   }
 
-  const text = `${mentionText} foi expulso do grupo por desrespeito reincidente. 🚨`;
-  const content = logoPath ? { image: { url: logoPath }, caption: text, mentions: [senderJid] } : { text, mentions: [senderJid] };
+  const msg = `${mentionText} foi expulso do grupo por desrespeito reincidente. 🚨`;
+  const content = logoPath ? { image: { url: logoPath }, caption: msg, mentions: [senderJid] } : { text: msg, mentions: [senderJid] };
   await sock.sendMessage(groupJid, content);
 
+  // Os insultos anteriores (dos avisos 1 e 2) + o desta vez: o motivo completo da expulsao fica registrado.
+  const previous = getRecentActions({ dias: 60, tipo: 'aviso_insulto', limit: 50 }).filter((a) => a.jid === senderJid).slice(0, 2).reverse().map((a) => (/disse: "([^"]*)"/.exec(a.resumo) || [])[1]).filter(Boolean);
+  const all = [...previous, said].filter(Boolean);
   try {
     await sock.groupParticipantsUpdate(groupJid, [senderJid], 'remove');
     delete counts[senderJid];
     saveInsultCounts(counts);
+    recordExpulsion({ jid: senderJid, nome: senderName });
+    logBotAction({ tipo: 'expulsao', jid: senderJid, nome, resumo: `EU expulsei o ${nome} do grupo, de forma automatica, porque ele me insultou 3 vezes (regra: 3 insultos = expulsao)${all.length ? `; o que ele disse: ${all.map((x) => `"${x}"`).join(' | ')}` : ''}` });
   } catch (err) {
     console.error(`Erro ao remover ${senderName} do grupo apos 3 insultos:`, err);
+    logBotAction({ tipo: 'expulsao', jid: senderJid, nome, resumo: `tentei expulsar o ${nome} por 3 insultos mas NAO consegui remover (${String(err?.message || err).slice(0, 80)})` });
   }
 }
