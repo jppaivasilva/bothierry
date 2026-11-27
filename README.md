@@ -16,7 +16,7 @@ O armazenamento é um conjunto de arquivos de texto (`messages.jsonl` etc.) em v
 
 ![Infraestrutura do Bothierry: celulares ↔ WhatsApp ↔ Baileys na VM da Oracle (handler, agente de IA, fila de envio, rotinas, painel, cloudflared, PM2, deploy) com serviços externos e o caminho de deploy via GitHub](docs/infraestrutura.png)
 
-*Infraestrutura em uma imagem (o diagrama abaixo mostra as mesmas peças em formato editável).*
+*Infraestrutura em uma imagem (o diagrama abaixo mostra as mesmas peças em formato editável). Os fluxogramas da [seção 3](#3-fluxos) seguem o mesmo estilo visual; os fontes e o gerador estão em `docs/fontes/`.*
 
 Visão geral de quem fala com quem:
 
@@ -92,109 +92,27 @@ flowchart LR
 
 ### 3.1. O caminho de uma mensagem do grupo
 
-```mermaid
-flowchart TD
-    A["📱 Mensagem chega no grupo"] --> B["Baileys (messages.upsert)"]
-    B --> C{"Reação, enquete,<br/>protocolo ou duplicada?"}
-    C -->|sim| X["ignora"]
-    C -->|não| D["Monta remetente, nome e texto"]
-    D --> E{"Tem link?"}
-    E -->|"repetido nas últimas 24h"| E1["zoa + áudio 'repetido'"]
-    E -->|"sem prévia"| E2["'sem thumb amigo?'"]
-    E -->|não| F
-    E1 --> F
-    E2 --> F
-    F["Regras do grupo (regras/*.txt)<br/>+ IA p/ 'iPhone'"] --> G["Grava em messages.jsonl"]
-    G --> H{"Marco de 50/100<br/>mensagens no dia?"}
-    H -->|sim| H1["avisa marcando a pessoa"]
-    H -->|não| I
-    H1 --> I{"Começa com ! ou / ?"}
-    I -->|"comando fixo"| J["executa o comando<br/>(tabela commands)"]
-    I -->|"nome de um áudio"| K["toca audios/nome"]
-    I -->|"não é comando"| L{"Menciona @Bothierry?"}
-    L -->|"insulto"| L1["IA classifica → aviso / remoção"]
-    L -->|"pergunta, conversa ou foto"| L2["entra na fila de IA<br/>(agente: funções, memória, visão)<br/>resposta em reply"]
-    L -->|não| Z["fim"]
-```
+![Fluxograma: o caminho de uma mensagem do grupo — chega, Baileys, filtro de reações e duplicadas, link repetido ou sem prévia, regras, gravação, marco de 50/100, comando fixo ou áudio, e menção ao bot (insulto ou pergunta, que entra na fila de IA)](docs/fluxo-mensagem.png)
 
 ### 3.2. Login no painel e presença em eventos (`!painel`)
 
-```mermaid
-sequenceDiagram
-    actor M as Membro
-    participant G as Grupo / WhatsApp
-    participant Bot as Bot (index.js)
-    participant P as Painel (dashboard.js)
-    participant E as events.json
-
-    M->>G: !painel
-    G->>Bot: comando + jid do remetente
-    Bot->>P: createLoginToken(jid, nome)
-    Bot-->>M: DM com link de uso único (5 min)
-    Bot-->>G: "te mandei o link no privado"
-    M->>P: abre /entrar?t=TOKEN (só mostra o botão)
-    M->>P: toca em "Entrar" (POST) → token consumido
-    P-->>M: cookie de sessão "member" (assinado)
-    M->>P: aba Eventos → "✅ Vou"
-    P->>E: addAttendee(evento, jid, nome)
-    Note over E,G: o !eventos no WhatsApp lê o mesmo arquivo
-```
+![Diagrama de sequência: !painel gera um link de uso único no privado, o membro entra no painel, recebe cookie de sessão e marca Vou num evento, gravado em events.json](docs/fluxo-login-painel.png)
 
 Há três papéis no painel: **viewer** (login comum), **member** (entrou pelo link do `!painel`, pode marcar presença) e **admin** (usuário `root`, vê também apagar áudio, reiniciar o bot e logs). Veja a [seção 9](#9-painel-web).
 
 ### 3.3. Deploy automático
 
-```mermaid
-flowchart LR
-    A["Mudança no código<br/>(Pull Request + CI: eslint e testes)"] -->|"merge"| B["GitHub — branch main"]
-    B --> C["⏱ cron na VM<br/>a cada 3 min"]
-    C --> D["deploy.sh: git fetch"]
-    D --> E{"commit novo?"}
-    E -->|não| Z["nada a fazer"]
-    E -->|sim| F["git reset --hard origin/main"]
-    F --> G{"package.json mudou?"}
-    G -->|sim| G1["npm install"]
-    G -->|não| H
-    G1 --> H["node --check dos .js<br/>(src/, src/bot/, scripts/)"]
-    H --> I{"sintaxe ok?"}
-    I -->|sim| J["pm2 restart Bothierry"]
-    I -->|não| K["volta pro commit anterior<br/>NÃO reinicia (bot segue no ar)"]
-```
+![Fluxograma do deploy automático: merge na main, cron na VM a cada 3 minutos, git fetch, reset, npm install se preciso, checagem de sintaxe e pm2 restart (ou volta ao commit anterior se falhar)](docs/fluxo-deploy.png)
 
 ### 3.4. Uma pergunta ao bot (agente de IA)
 
-```mermaid
-flowchart TD
-    A["@Bothierry ... (ou reply a uma mensagem dele)<br/>pode vir com foto"] --> B["Handler só enfileira<br/>(não espera a IA)"]
-    B --> C["Fila de IA<br/>máx. 3 ao mesmo tempo · 1 por pessoa<br/>ordem de chegada"]
-    C --> D["Monta o prompt:<br/>persona + memória da pessoa + diário do bot<br/>+ hora e calendário + conversa recente"]
-    D --> E["Agente (agent.js)<br/>a IA decide o próximo passo"]
-    E -->|"precisa de dado"| F["Chama funções<br/>(em paralelo, com timeout)"]
-    F --> E
-    E -->|"pronto"| G["Resposta"]
-    F -.- F1["dados do grupo · cotação · tempo · futebol<br/>notícias · busca na web · ler link<br/>memória · lembretes · diário · insultos"]
-    G --> H["Fila de envio → WhatsApp<br/>em reply na mensagem original"]
-```
+![Fluxograma de uma pergunta ao bot: handler enfileira, fila de IA, prompt com memória e diário, laço do agente com funções, resposta e fila de envio em reply](docs/fluxo-agente.png)
 
 O agente roda em **laço**: a IA chama funções, olha o resultado e decide se precisa de outra, até ter o que responder. Proteções: no máximo **5 passos** e ~**US$ 0,05 por pergunta** (passou, é obrigada a responder com o que tem), consulta repetida reaproveita o resultado, timeout por função, e **trava mensal de gasto** (padrão US$ 10, `AI_MONTHLY_BUDGET_USD`). Dado que muda (cotação, tempo, placar, notícia) **só vem de função**, nunca da cabeça da IA; sem fonte, ela diz que não conseguiu buscar. Cada pergunta deixa um **traço** (passos, funções, custo, erros) na aba **Agente** do painel.
 
 ### 3.5. Fila de respostas e envio confiável
 
-```mermaid
-flowchart LR
-    Q["Pergunta na fila<br/>(ai_queue.json)"] --> R["IA responde<br/>(retry + timeout de 90 s)"]
-    R -->|"falhou de vez"| C["resposta de contingência<br/>(ninguém fica no vácuo)"]
-    R --> S["Envio confiável"]
-    C --> S
-    S --> W{"WhatsApp<br/>conectado?"}
-    W -->|não| W1["espera reconectar<br/>(até 4 min)"]
-    W1 --> W
-    W -->|sim| X["envia pelo socket vivo<br/>(1 envio a cada 0,7 s)"]
-    X -->|"erro passageiro"| Y["tenta de novo<br/>(com espera crescente)"]
-    Y --> W
-    X -->|ok| Z["entregue ✅"]
-    X -->|"falhou"| T["resposta guardada:<br/>reenvio em 30 s, 1, 2 e 5 min<br/>sem pagar a IA de novo"]
-```
+![Fluxograma da fila de respostas e do envio confiável: IA com retry e contingência, espera de reconexão, reenvio, resposta guardada e descarte após 30 minutos](docs/fluxo-fila-envio.png)
 
 Se o bot reiniciar, as perguntas pendentes **voltam da fila** (`ai_queue.json`); pergunta com mais de 30 min é descartada em vez de responder fora de hora. A aba **Agente** mostra a fila (na fila, enviadas, não entregues, reenvios, esperas por reconexão). Detalhes na [seção 10](#10-comandos-do-bot).
 
@@ -261,7 +179,7 @@ Tudo em `src/` (JavaScript, módulos ES):
 | `elections.js` | Apuração do TSE (eleição 2026, já concluída) |
 | `report.js` | Relatório pelo terminal (`npm run report`) |
 
-Fora de `src/`: `deploy.sh` (deploy automático), `ecosystem.config.cjs` (PM2), `test/` (testes automáticos, `npm test`), `docs/` (a imagem da arquitetura), `scripts/set-avatar.js` (associa foto a alguém na mão), `scripts/registrar-expulsao.js` (registra à mão uma expulsão anterior ao histórico), `assets/` (foto-base do bot, imagens fixas, `fonts/` com a fonte Inter do cartão de previsão).
+Fora de `src/`: `deploy.sh` (deploy automático), `ecosystem.config.cjs` (PM2), `test/` (testes automáticos, `npm test`), `docs/` (a imagem da arquitetura e dos fluxogramas, com os fontes em `docs/fontes/`), `scripts/set-avatar.js` (associa foto a alguém na mão), `scripts/registrar-expulsao.js` (registra à mão uma expulsão anterior ao histórico), `assets/` (foto-base do bot, imagens fixas, `fonts/` com a fonte Inter do cartão de previsão).
 
 **Nomes padronizados:** o mesmo nome (ex.: "Lucas Souza", "João Paulo", "Gabriel (Gabs)") aparece no painel, em `!ranking`, no ranking de fim de expediente e semanal, no `!resumo`, em `!eventos`/`!vou`/`!naovou`, nas respostas de perguntas sobre dados e nos aniversários — cartão, legenda, `!aniversariantes` e nome do grupo. Os apelidos da lista de aniversários (`birthdays.json`) só servem para achar o membro; quando há ligação, sai o nome padronizado dele. Para corrigir a grafia de alguém, edite o mapa em `src/displayNames.js`.
 

@@ -418,5 +418,10 @@
   "pr": 85,
   "titulo": "README com o infográfico e tudo que mudou",
   "resumo": "O README ganhou o infográfico da infraestrutura (docs/infraestrutura.png) e foi reorganizado com o que foi construído: diagramas novos do agente de IA e da fila de respostas com envio confiável, tabelas de módulos, dados, tarefas agendadas, integrações e .env atualizadas, firewall corrigido (painel só pelo túnel) e novas dicas de operação e segurança (memória, limites da IA, status de grupo)."
+ },
+ {
+  "pr": 86,
+  "titulo": "Fluxogramas do README no estilo do infográfico",
+  "resumo": "Os fluxogramas do README (caminho de uma mensagem, login no painel, deploy automático, agente de IA e fila de envio) foram refeitos como imagens no mesmo visual do infográfico da infraestrutura: fundo verde-escuro, caixas arredondadas, setas menta, decisões em amarelo e falhas em vermelho. Os fontes e o gerador ficam em docs/fontes para refazer quando algo mudar."
  }
 ]
