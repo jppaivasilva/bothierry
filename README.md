@@ -2,6 +2,8 @@
 
 Bot que conecta no WhatsApp (via [Baileys](https://github.com/WhiskeySockets/Baileys)), escuta as mensagens do grupo e grava localmente quem enviou o quê e quando. Com isso ele conta mensagens por pessoa, gera ranking e resumo da conversa, fiscaliza regras do grupo, manda avisos automáticos (bom dia, aniversários) e mantém um **painel web** com gráficos, eventos e administração.
 
+Quando alguém marca o **@Bothierry** (ou responde a uma mensagem dele), entra em ação um **agente de IA**: ele conversa sobre qualquer assunto, consulta dados reais (cotação, previsão do tempo, placares, notícias, busca na web), enxerga fotos, lembra de fatos de cada pessoa, agenda lembretes e sabe explicar o que ele mesmo fez no grupo. Também posta cartões como **status do grupo**. Tudo com limite de gasto, fila de respostas e reenvio automático se o WhatsApp cair.
+
 Não usa a API oficial da Meta: conecta como se fosse o "WhatsApp Web" de um número próprio, então não precisa de aprovação nem custa nada. Em troca, o número do bot precisa continuar logado (igual o WhatsApp Web normal).
 
 O armazenamento é um conjunto de arquivos de texto (`messages.jsonl` etc.) em vez de um banco de dados — de propósito, pra não depender de nenhum pacote com código nativo e caber numa VM pequena.
@@ -11,6 +13,10 @@ O armazenamento é um conjunto de arquivos de texto (`messages.jsonl` etc.) em v
 ---
 
 ## 1. Arquitetura
+
+![Infraestrutura do Bothierry: celulares ↔ WhatsApp ↔ Baileys na VM da Oracle (handler, agente de IA, fila de envio, rotinas, painel, cloudflared, PM2, deploy) com serviços externos e o caminho de deploy via GitHub](docs/infraestrutura.png)
+
+*Infraestrutura em uma imagem (o diagrama abaixo mostra as mesmas peças em formato editável).*
 
 Visão geral de quem fala com quem:
 
@@ -30,17 +36,17 @@ flowchart LR
         direction TB
         PM2["PM2<br/>(supervisor do processo)"]
         subgraph Proc["Processo Node.js — src/index.js"]
-            BOT["Bot<br/>Baileys + comandos + crons"]
+            BOT["Bot<br/>Baileys · comandos · crons<br/>agente de IA + fila de envio"]
             DASH["Painel web<br/>HTTP :4321"]
         end
         TUN["cloudflared<br/>(serviço systemd)"]
         DEP["deploy.sh<br/>(cron a cada 3 min)"]
-        FILES[("Arquivos de dados<br/>messages.jsonl · events.json<br/>audios/ · auth_info/ ...")]
+        FILES[("Arquivos de dados<br/>messages.jsonl · events.json · memória<br/>lembretes · audios/ · auth_info/ ...")]
     end
 
     subgraph Ext["🌐 APIs externas"]
         OAI["OpenAI<br/>(GPT-4o mini, Whisper, imagens)"]
-        OTH["G1 (RSS) · Open-Meteo · BrasilAPI<br/>TSE"]
+        OTH["Tavily · Yahoo Finance · football-data<br/>Open-Meteo · RSS (G1, IGN, Canaltech)<br/>BrasilAPI · TSE"]
     end
 
     G <--> WA
@@ -57,7 +63,7 @@ flowchart LR
     DEP -.->|"valida + pm2 restart"| PM2
 ```
 
-**Em uma frase:** um único processo Node.js (gerenciado pelo PM2) numa VM gratuita da Oracle Cloud faz tudo — fala com o WhatsApp, executa os comandos, roda as tarefas agendadas e serve o painel web. O Cloudflare Tunnel expõe o painel em HTTPS, e o GitHub é a fonte do código (a VM se atualiza sozinha a partir da `main`).
+**Em uma frase:** um único processo Node.js (gerenciado pelo PM2) numa VM gratuita da Oracle Cloud faz tudo — fala com o WhatsApp, executa os comandos, roda o agente de IA e as tarefas agendadas e serve o painel web. O Cloudflare Tunnel expõe o painel em HTTPS, e o GitHub é a fonte do código (a VM se atualiza sozinha a partir da `main`).
 
 ---
 
@@ -73,9 +79,10 @@ flowchart LR
 | **Domínio / DNS** | `bothierry.com.br` registrado na **GoDaddy**, DNS na **Cloudflare** | |
 | **Código** | **GitHub** — `jppaivasilva/bothierry` (público) | branch `main` = o que está no ar |
 | **Deploy** | `deploy.sh` no **cron da VM** (a cada 3 min) | veja [3.3](#33-deploy-automático) |
-| **IA** | **OpenAI** | chave no `.env` da VM |
+| **IA e dados** | **OpenAI**, **Tavily**, **football-data.org** | chaves só no `.env` da VM (veja [seção 8](#8-configuração-env)) |
+| **Monitoramento** | **UptimeRobot** | avisa se `/health` cair; o painel Servidor/Sistema mostra o resto |
 
-**Firewall:** além da porta 22 (SSH), a 4321 foi liberada em duas camadas (iptables da VM e Security List da Oracle) — hoje o acesso normal ao painel é pelo túnel HTTPS.
+**Firewall:** só a porta 22 (SSH) fica aberta pra internet. O painel escuta apenas em `127.0.0.1` (`DASHBOARD_HOST` no `.env`) e a regra da porta 4321 foi **removida** da Security List da Oracle — o único caminho de fora até o painel é o túnel HTTPS da Cloudflare.
 
 **Recursos:** a RAM da VM fica em ~80–90% de uso. É o limite do hardware gratuito (1 GB), não vazamento do código — por isso o histórico fica em arquivos lidos sob demanda e o Baileys roda com `syncFullHistory: false`.
 
@@ -106,7 +113,7 @@ flowchart TD
     I -->|"nome de um áudio"| K["toca audios/nome"]
     I -->|"não é comando"| L{"Menciona @Bothierry?"}
     L -->|"insulto"| L1["IA classifica → aviso / remoção"]
-    L -->|"pergunta sobre dados"| L2["IA escolhe consulta real<br/>nos dados e responde"]
+    L -->|"pergunta, conversa ou foto"| L2["entra na fila de IA<br/>(agente: funções, memória, visão)<br/>resposta em reply"]
     L -->|não| Z["fim"]
 ```
 
@@ -139,7 +146,7 @@ Há três papéis no painel: **viewer** (login comum), **member** (entrou pelo l
 
 ```mermaid
 flowchart LR
-    A["Mudança no código<br/>(Pull Request)"] -->|"merge"| B["GitHub — branch main"]
+    A["Mudança no código<br/>(Pull Request + CI: eslint e testes)"] -->|"merge"| B["GitHub — branch main"]
     B --> C["⏱ cron na VM<br/>a cada 3 min"]
     C --> D["deploy.sh: git fetch"]
     D --> E{"commit novo?"}
@@ -148,11 +155,48 @@ flowchart LR
     F --> G{"package.json mudou?"}
     G -->|sim| G1["npm install"]
     G -->|não| H
-    G1 --> H["node --check em todos os .js"]
+    G1 --> H["node --check dos .js<br/>(src/, src/bot/, scripts/)"]
     H --> I{"sintaxe ok?"}
     I -->|sim| J["pm2 restart Bothierry"]
     I -->|não| K["volta pro commit anterior<br/>NÃO reinicia (bot segue no ar)"]
 ```
+
+### 3.4. Uma pergunta ao bot (agente de IA)
+
+```mermaid
+flowchart TD
+    A["@Bothierry ... (ou reply a uma mensagem dele)<br/>pode vir com foto"] --> B["Handler só enfileira<br/>(não espera a IA)"]
+    B --> C["Fila de IA<br/>máx. 3 ao mesmo tempo · 1 por pessoa<br/>ordem de chegada"]
+    C --> D["Monta o prompt:<br/>persona + memória da pessoa + diário do bot<br/>+ hora e calendário + conversa recente"]
+    D --> E["Agente (agent.js)<br/>a IA decide o próximo passo"]
+    E -->|"precisa de dado"| F["Chama funções<br/>(em paralelo, com timeout)"]
+    F --> E
+    E -->|"pronto"| G["Resposta"]
+    F -.- F1["dados do grupo · cotação · tempo · futebol<br/>notícias · busca na web · ler link<br/>memória · lembretes · diário · insultos"]
+    G --> H["Fila de envio → WhatsApp<br/>em reply na mensagem original"]
+```
+
+O agente roda em **laço**: a IA chama funções, olha o resultado e decide se precisa de outra, até ter o que responder. Proteções: no máximo **5 passos** e ~**US$ 0,05 por pergunta** (passou, é obrigada a responder com o que tem), consulta repetida reaproveita o resultado, timeout por função, e **trava mensal de gasto** (padrão US$ 10, `AI_MONTHLY_BUDGET_USD`). Dado que muda (cotação, tempo, placar, notícia) **só vem de função**, nunca da cabeça da IA; sem fonte, ela diz que não conseguiu buscar. Cada pergunta deixa um **traço** (passos, funções, custo, erros) na aba **Agente** do painel.
+
+### 3.5. Fila de respostas e envio confiável
+
+```mermaid
+flowchart LR
+    Q["Pergunta na fila<br/>(ai_queue.json)"] --> R["IA responde<br/>(retry + timeout de 90 s)"]
+    R -->|"falhou de vez"| C["resposta de contingência<br/>(ninguém fica no vácuo)"]
+    R --> S["Envio confiável"]
+    C --> S
+    S --> W{"WhatsApp<br/>conectado?"}
+    W -->|não| W1["espera reconectar<br/>(até 4 min)"]
+    W1 --> W
+    W -->|sim| X["envia pelo socket vivo<br/>(1 envio a cada 0,7 s)"]
+    X -->|"erro passageiro"| Y["tenta de novo<br/>(com espera crescente)"]
+    Y --> W
+    X -->|ok| Z["entregue ✅"]
+    X -->|"falhou"| T["resposta guardada:<br/>reenvio em 30 s, 1, 2 e 5 min<br/>sem pagar a IA de novo"]
+```
+
+Se o bot reiniciar, as perguntas pendentes **voltam da fila** (`ai_queue.json`); pergunta com mais de 30 min é descartada em vez de responder fora de hora. A aba **Agente** mostra a fila (na fila, enviadas, não entregues, reenvios, esperas por reconexão). Detalhes na [seção 10](#10-comandos-do-bot).
 
 ---
 
@@ -165,11 +209,11 @@ Tudo em `src/` (JavaScript, módulos ES):
 | `index.js` | Entrada (30 linhas): liga as tarefas agendadas, o painel e a conexão. O resto vive em `src/bot/` (abaixo) |
 | `bot/shared.js` | Infraestrutura compartilhada: constantes, data/hora de Brasília, cliente OpenAI (com registro de consumo), lista de grupos, feriados, `botState.sock` |
 | `bot/connection.js` | Conexão com o WhatsApp: socket, reconexão, sessão deslogada, estado pro `/health` |
-| `bot/messageHandler.js` | O que acontece com cada mensagem recebida: link repetido/thumb, regras, marcos, comandos, perguntas ao bot, enxurrada de obrigados |
+| `bot/messageHandler.js` | O que acontece com cada mensagem recebida: link repetido/thumb, regras, marcos, comandos, enxurrada de obrigados; perguntas ao bot só são **enfileiradas** (a IA roda na fila) |
 | `bot/commands.js` | Mapa de comandos, categorias do `!menu` e o parser de `!comando` |
 | `bot/basicCommands.js` · `eventCommands.js` · `audioCommands.js` · `electionFlow.js` | Comandos por assunto (ranking/resumo/figurinha…, eventos, áudios, eleição) |
 | `bot/birthdayFlow.js` · `dailyMessages.js` · `specialMessages.js` · `avatarTheme.js` | Aniversários; mensagens do dia (bom dia, fim de expediente, resumos); mensagens especiais (nuvem, estreia, notícias, Wrapped); foto temática do bot |
-| `bot/insults.js` · `botConversation.js` | Regras com IA (insulto ao bot, iPhone) e contexto quando falam com o bot |
+| `bot/insults.js` · `botConversation.js` | Regras com IA (insulto ao bot com aviso/expulsão, iPhone) e contexto quando falam com o bot (últimas 25 mensagens, mensagem respondida). Avisos e expulsões vão pro diário do bot e pro histórico de insultos |
 | `bot/crons.js` · `bootstrap.js` | Todas as tarefas agendadas; e o que roda antes de tudo (`.env`, erros pro painel) |
 | `dashboard.js` | Servidor HTTP do painel: login/sessões, papéis (viewer/member/admin), rotas `/api/*`, página única (HTML+CSS+JS embutidos) |
 | `db.js` | Armazenamento das mensagens: grava, consulta (ranking, tendência, mapa de calor), arquiva antigas, descobre o **grupo principal** |
@@ -184,7 +228,17 @@ Tudo em `src/` (JavaScript, módulos ES):
 | `scheduled.js` | Mensagens agendadas pontuais (`scheduled_messages.json`) |
 | `rules.js` | Regras do grupo (`regras/*.txt`) |
 | `persona.js` | A **voz do Bothierry** (primeira pessoa, descontraído, amigo do grupo), usada nos prompts da IA (perguntas, `!resumo`). As frases fixas do bot seguem o mesmo tom — ao escrever uma nova, fale como "eu" |
-| `dataQuestions.js` | Perguntas sobre dados do grupo via `@Bothierry` + IA. Quando falam com o bot (marcando ou **respondendo a uma mensagem dele**, no máximo 1 vez a cada 15 s por pessoa; resposta sem marcar só vira conversa com IA a partir de 8 letras, e se for xingamento o bot devolve "teu cu" sem contar para a expulsão — o insulto *com marcação* continua no fluxo de avisos/expulsão), a IA também recebe as últimas 25 mensagens do grupo (até 3 h) e a mensagem respondida, pra entender referências como "ele" ou "isso" (`BOT_CONTEXT_*` em `index.js`) |
+| `dataQuestions.js` | **Entrada do agente**: monta o prompt (persona, memória da pessoa, diário do bot, hora/calendário, regras de dado ao vivo e de honestidade), junta as funções (dados do grupo + as dos módulos abaixo) e chama o `agent.js`. Falar com o bot = marcar ou **responder a uma mensagem dele** (no máximo 1 vez a cada 15 s por pessoa; resposta sem marcar só vira conversa a partir de 8 letras, e se for xingamento o bot devolve "teu cu" sem contar para a expulsão — o insulto *com marcação* segue o fluxo de avisos/expulsão) |
+| `agent.js` | **Laço do agente**: a IA encadeia funções (até 5 passos, ~US$ 0,05 por pergunta, consulta repetida reaproveitada, timeout por função) e cada pergunta grava um **traço** em `agent_traces.jsonl` pra aba Agente |
+| `liveData.js` | Funções de **dado ao vivo**: `cotacao` (Yahoo Finance), `previsao_tempo` (Open-Meteo, qualquer cidade), `jogos_futebol` (football-data.org) e `noticias` (IGN/Canaltech/G1), com cache curto e timeout |
+| `research.js` | `buscar_web` (Tavily) e `ler_link`; conteúdo da web é tratado como **externo e não confiável**; teto diário de buscas |
+| `memory.js` · `conversation.js` | **Memória**: fatos de longo prazo por pessoa e do grupo (com regras de privacidade no código) e conversa recente de cada pessoa (20 min, só em RAM) |
+| `reminders.js` · `bot/reminderFlow.js` | **Lembretes** ("me lembra sexta às 20h de…"), cron de 1 min que dispara no grupo e comandos `!lembretes` / `!cancelar` |
+| `botLog.js` · `bot/groupEvents.js` · `insultHistory.js` | **Diário do bot** (o que ele fez: avisos, expulsões, regras, quem entrou/saiu) que sempre vai no prompt, e **histórico permanente de insultos** e expulsões por pessoa |
+| `bot/aiQueue.js` · `bot/aiJobs.js` · `bot/reliableSend.js` | **Fila das perguntas ao bot** (durável, máx. 3 simultâneas, contingência) e **envio confiável** de tudo que o bot manda (fila com intervalo, espera reconexão, reenvio) — veja [3.5](#35-fila-de-respostas-e-envio-confiável) |
+| `bot/vision.js` | **Visão**: foto/print/figurinha vai junto pra IA (reduzida a 1024 px, nunca gravada em disco) |
+| `bot/groupStatus.js` · `statusCommands.js` · `root.js` | **Status de grupo** (texto e foto, manual e automático) e a noção de "root" do WhatsApp (conta do bot ou `ROOT_NUMBERS`) |
+| `bot/memoryCommands.js` | Comandos `!memoria`, `!esquecer` e `!insultos` |
 | `groupPhoto.js` | Foto do grupo/bot editada por IA |
 | `avatars.js` | Cache de fotos de perfil dos membros |
 | `displayNames.js` | **Nome padronizado** de cada pessoa (acento, maiúsculas, homônimos) — usado em **todo lugar**: painel, rankings do WhatsApp, `!resumo`, eventos, perguntas sobre dados e aniversários |
@@ -207,7 +261,7 @@ Tudo em `src/` (JavaScript, módulos ES):
 | `elections.js` | Apuração do TSE (eleição 2026, já concluída) |
 | `report.js` | Relatório pelo terminal (`npm run report`) |
 
-Fora de `src/`: `deploy.sh` (deploy automático), `ecosystem.config.cjs` (PM2), `scripts/set-avatar.js` (associa foto a alguém na mão), `assets/` (foto-base do bot, imagens fixas, `fonts/` com a fonte Inter do cartão de previsão).
+Fora de `src/`: `deploy.sh` (deploy automático), `ecosystem.config.cjs` (PM2), `test/` (testes automáticos, `npm test`), `docs/` (a imagem da arquitetura), `scripts/set-avatar.js` (associa foto a alguém na mão), `scripts/registrar-expulsao.js` (registra à mão uma expulsão anterior ao histórico), `assets/` (foto-base do bot, imagens fixas, `fonts/` com a fonte Inter do cartão de previsão).
 
 **Nomes padronizados:** o mesmo nome (ex.: "Lucas Souza", "João Paulo", "Gabriel (Gabs)") aparece no painel, em `!ranking`, no ranking de fim de expediente e semanal, no `!resumo`, em `!eventos`/`!vou`/`!naovou`, nas respostas de perguntas sobre dados e nos aniversários — cartão, legenda, `!aniversariantes` e nome do grupo. Os apelidos da lista de aniversários (`birthdays.json`) só servem para achar o membro; quando há ligação, sai o nome padronizado dele. Para corrigir a grafia de alguém, edite o mapa em `src/displayNames.js`.
 
@@ -230,10 +284,17 @@ Tudo em arquivos na pasta do projeto, **na VM** (a maioria está no `.gitignore`
 | `birthdays.json`, `apelidos.txt` | aniversariantes e apelidos | não |
 | `birthday_links.json` | ligações aniversariante → membro feitas no painel (admin) | não |
 | `member_photos/` | fotos de membros enviadas pelo painel (admin, tocando na foto na aba Membros) — foto de pessoa não vai pro git | não |
-| `member_photos/` | fotos de membros enviadas pelo painel (admin, tocando na foto na aba Membros) — foto de pessoa não vai pro git | não |
 | `birthday_photos/` | fotos antigas enviadas pelo **nome** do aniversariante (função removida; continuam valendo, e saem junto ao remover a foto do membro ligado) | não |
 | `extra_members.json` | pessoas adicionadas na mão à lista de membros (admin) | não |
 | `scheduled_messages.json` | mensagens agendadas pontuais | não |
+| `agent_traces.jsonl` | traço de cada pergunta ao agente (passos, funções, custo, erros; últimas ~500) | não |
+| `agent_memory.json` | memória de longo prazo (fatos por pessoa e do grupo) | não |
+| `reminders.json` | lembretes pendentes | não |
+| `ai_queue.json` | fila das perguntas ao bot (pendentes e as últimas 200 concluídas) | não |
+| `bot_actions.jsonl` | diário do que o bot fez e do que aconteceu no grupo (avisos, expulsões, entradas/saídas) | não |
+| `insult_history.json` | histórico permanente de insultos e expulsões por pessoa | não |
+| `group_status_state.json` | status de grupo que o bot postou (pra poder apagar) | não |
+| `openai_usage.jsonl` | consumo da OpenAI (tokens e custo estimado) | não |
 | `audios/` | áudios tocáveis (`!nome`), `repetido.mp3` do aviso de link repetido | não |
 | `regras/`, `regulamento.txt`, `megasena.txt` | regras e textos fixos | não |
 | `avatars/`, `avatarbot/`, `*_state.json` | fotos em cache, fotos temáticas, estados internos | não |
@@ -249,15 +310,16 @@ Todas dentro do processo do bot (`node-cron`, fuso `America/Sao_Paulo`, tolerân
 
 | Quando | Tarefa |
 | --- | --- |
-| a cada minuto | envia mensagens agendadas vencidas (`scheduled_messages.json`) |
+| a cada minuto | envia mensagens agendadas vencidas (`scheduled_messages.json`) e **lembretes** vencidos (`reminders.json`) |
 | a cada 5 min | grava CPU/memória/disco da VM (`metrics.jsonl`) |
 | a cada 10 min | apuração de eleição (só em dia de votação) |
 | 00:01 | sincroniza o nome do grupo (reverte renomeações do dia anterior) |
 | 03:00 | arquiva mensagens antigas e poda métricas |
 | 03:30 | troca a foto do bot se o tema mudou; sincroniza fotos de perfil |
-| 08:00 (seg–sex; mais as datas extras de fim de semana em `morning.js`) | bom dia + feriado nacional + **cartão de previsão do tempo** (imagem; se falhar, vai em texto) |
+| 03:40 | **backup** local dos dados (`backups/`, 7 mais recentes) |
+| 08:00 (seg–sex; mais as datas extras de fim de semana em `morning.js`) | bom dia + feriado nacional + **cartão de previsão do tempo** (imagem; se falhar, vai em texto), que também sai como **status do grupo** |
 | 08:00 (seg e qua) | atualiza a foto do grupo com a notícia do dia (via IA) |
-| 09:00 | aviso de aniversariantes (**cartão em imagem** com a foto; texto se falhar) + renomeia o grupo |
+| 09:00 | aviso de aniversariantes (**cartão em imagem** com a foto; texto se falhar) + renomeia o grupo; o cartão também vira **status do grupo** |
 | 18:00 (seg–sex) | ranking do expediente (08h–18h), seguido do **cartão da nuvem de palavras do dia** (pula se o dia teve menos de 5 palavras diferentes) |
 | 18:05 (sexta) | ranking semanal |
 | 00:00 de 19/11/2026 (uma vez) | **cartão da estreia do GTA VI** marcando todo o grupo (`mentionAll`); se o bot estava fora do ar, manda ao reconectar até o meio-dia |
@@ -275,14 +337,19 @@ Além disso, ao conectar o bot checa aniversário, nome do grupo, tema da foto e
 | **OpenAI** — `gpt-4o-mini` | `!resumo`, regra do iPhone, insultos ao bot, perguntas sobre dados, escolher o tema da foto do grupo a partir da notícia | `OPENAI_API_KEY` |
 | **OpenAI** — `whisper-1` | `!transcrever` | `OPENAI_API_KEY` |
 | **OpenAI** — `gpt-image-1.5` (troca por `OPENAI_IMAGE_MODEL`) | edição da foto do grupo/bot (o item mais caro do bot) | `OPENAI_API_KEY` |
-| **G1** (RSS) | notícia da foto do grupo | não |
+| **Tavily** | busca na web e leitura de links pelo agente | `TAVILY_API_KEY` (grátis) |
+| **Yahoo Finance** | cotações (dólar, euro, bitcoin, Ibovespa, ações) | não |
+| **football-data.org** | placares e próximos jogos (Brasileirão, ligas europeias, Champions, Copa do Mundo) | `FOOTBALL_DATA_API_KEY` (grátis) |
+| **G1 · IGN Brasil · Canaltech** (RSS) | notícia da foto do grupo; manchetes e notícias de games | não |
 | **Open-Meteo** | previsão do tempo do bom dia (vira o cartão em imagem) | não |
 | **BrasilAPI** | feriados nacionais | não |
 | **TSE** | apuração das eleições | não |
 | **Cloudflare** | túnel HTTPS e DNS do painel | conta Cloudflare |
+| **GitHub** (repositório e Actions) | código, PRs e testes automáticos antes do deploy | não |
+| **UptimeRobot** | monitor externo do `/health` | conta UptimeRobot |
 | **Chart.js** (CDN jsDelivr) | gráficos do painel, carregado no navegador | não |
 
-Sem `OPENAI_API_KEY`, os comandos de IA avisam que falta configurar, em vez de quebrar.
+Sem `OPENAI_API_KEY`, os comandos de IA avisam que falta configurar, em vez de quebrar. Sem a chave do Tavily ou do football-data, só aquela função avisa "não configurado" e o resto do bot segue normal.
 
 ---
 
@@ -295,6 +362,15 @@ Arquivo `.env` na raiz do projeto, **só na VM** (nunca no git). O PM2 o carrega
 | `OPENAI_API_KEY` | chave da OpenAI (resumo, transcrição, IA, imagens) |
 | `DASHBOARD_USER` / `DASHBOARD_PASS` | login comum do painel (perfil **viewer**). Se `DASHBOARD_PASS` ficar vazia, o painel fica **aberto sem login** |
 | `ADMIN_USER` / `ADMIN_PASS` | login de **administrador** do painel (`ADMIN_USER` padrão: `root`). Sem `ADMIN_PASS`, ninguém entra como admin |
+| `DASHBOARD_HOST` | `127.0.0.1` faz o painel responder só localmente (acesso de fora só pelo túnel) |
+| `AI_MONTHLY_BUDGET_USD` | teto mensal de gasto com IA (padrão `10`; `0` desliga). Passou, a IA pausa até o dia 1º |
+| `TAVILY_API_KEY` | busca na web e leitura de links (opcional) |
+| `FOOTBALL_DATA_API_KEY` | placares de futebol (opcional) |
+| `OPENAI_IMAGE_MODEL` | modelo de imagem (padrão `gpt-image-1.5`) |
+| `GROUP_STATUS_ENABLED` | status de grupo vem **ligado**; `0` desliga comando e automáticos |
+| `GROUP_STATUS_AUTO` | cartões que saem sozinhos como status (padrão `previsao,aniversario`; vazio = nenhum) |
+| `STATUS_GRUPO_ONLY_ROOT` | `1` restringe o `!statusgrupo` ao root |
+| `ROOT_NUMBERS` | números (separados por vírgula, como o WhatsApp mostra pro bot) com poder de root, além da própria conta do bot |
 | `DEBUG=1` | loga cada mensagem recebida e detalhes internos |
 
 `.env.example` mostra o formato. **Não coloque senhas reais no repositório nem neste README.**
@@ -319,12 +395,12 @@ A sessão é um cookie assinado com HMAC (30 dias), com o papel dentro da assina
 
 - **Visão geral** — mensagens por hora do dia (com 👑 de quem mais falou em cada hora) e **ranking** (Expediente 08h–18h ou dia completo, com seletor de data).
 - **Atividade** — tendência por pessoa (7/14/30 dias) e mapa de calor (dia da semana × hora).
-- **Agente** *(só root)* — o que o agente de IA fez em cada pergunta: passos, funções consultadas, custo, tempo e erros.
+- **Agente** *(só root)* — a **fila de respostas** (na fila, enviadas e não entregues em 24 h, reenvios, esperas por reconexão) e o que o agente fez em cada pergunta: passos, funções consultadas, custo, tempo e erros (📷 = pergunta com foto).
 - **Consumo** *(só root)* — também mostra a **trava mensal de gasto**: passou do limite do mês de calendário (padrão US$ 10,00 estimado; `AI_MONTHLY_BUDGET_USD` no `.env`, `0` desliga) a IA pausa até o dia 1º, com aviso único em *Erros recentes* — custo estimado da OpenAI (hoje, 7 dias, este mês, 30 dias, total), custo por dia (com os valores nas barras e as datas) e por funcionalidade/modelo. Estimativa a partir dos tokens registrados; o valor oficial é o do painel da OpenAI. Modelo sem preço na tabela de `src/usage.js` aparece só com os tokens ("+?").
 - **Versões** *(só root)* — histórico dos PRs mergeados (título, resumo em português, data e hash), com a versão que está no ar marcada. **Ao abrir um PR novo, acrescente uma entrada em `changelog.json`** (`pr`, `titulo`, `resumo`); sem ela a aba mostra só o título do PR.
 - **Nuvem** — nuvem de palavras do dia (escolha a data); palavras maiores = mais faladas.
 - **Aniversários** — todos os aniversariantes por mês (com busca), o próximo em destaque; o admin também faz aqui a ligação aniversariante → membro. Pessoa adicionada na mão que depois manda mensagem no grupo é **juntada** ao membro real (mesmo nome de exibição): ligação e foto passam pra ele.
-- **Perfis** — escolha uma pessoa e veja a página dela: números do ano (posição, sequência, campeão do dia, horário favorito), total de sempre, histórico dos últimos 60 dias, mensagens por hora, palavras favoritas e o cartão do Wrapped (dá pra baixar). Dados em `src/profile.js`.
+- **Perfis** — escolha uma pessoa e veja a página dela (inclui o cartão *Insultos ao bot* quando houver): números do ano (posição, sequência, campeão do dia, horário favorito), total de sempre, histórico dos últimos 60 dias, mensagens por hora, palavras favoritas e o cartão do Wrapped (dá pra baixar). Dados em `src/profile.js`.
 - **Membros** — todos do grupo, **ordenados pelo ranking de hoje** (quem não falou fica por último), com busca; clicar abre os detalhes da pessoa (pódio, horário preferido, últimos 14 dias). **Admin:** tocar na **foto** (ou no círculo com a inicial) abre o menu **Enviar/Trocar foto** e **Remover foto enviada** (volta pra do WhatsApp); o botão **➕ Adicionar pessoa** inclui na lista quem não está no grupo (ex.: Vini, Felipe Lopes) — ela ganha foto editável, entra na ligação dos aniversários e pode ser removida pelo mesmo menu. A foto enviada vale em todo o painel (ranking, campeões da hora, detalhes) e no cartão de aniversário.
 - **Comandos** — menu de todos os comandos, aniversariantes cadastrados e áudios salvos (o admin vê o ✕ pra apagar).
 - **Eventos** — próximos eventos com confirmados/ausentes, um nome por linha, e botões Vou / Não vou (para *member*). **Qualquer pessoa com acesso ao painel** (login comum, ou pelo link do `!painel`) pode **➕ Criar evento** (nome, data, horário, local e detalhes extras — mesmo formato do `!addevento`) e **🗑️ Excluir evento** em cada cartão (apaga junto a lista de confirmados). Ao criar, o **bot avisa no grupo** ("📣 Novo evento!", com quem criou, se a pessoa entrou pelo `!painel`). O nome identifica o evento, então não aceita dois com o mesmo nome (nem pelo `!addevento`). Quem entra pelo link do `!painel` já abre nesta aba.
@@ -359,14 +435,16 @@ Use `!` ou `/` no começo. `!menu` lista tudo no próprio WhatsApp (e a aba **Co
 | `!insultos` | quadro de quem mais xingou o bot e quantas vezes foi expulso |
 | `!lembretes` · `!cancelar 12` | seus lembretes pendentes / cancelar um (criar: "@Bothierry me lembra sexta às 20h de…") |
 | `!memoria` · `!esquecer 12` / `!esquecer tudo` | o que o bot lembra de você e do grupo / apagar (cada um só apaga o que é seu) |
-| `!testarbomdia` *(oculto)* | manda o bom dia (com o cartão de previsão) só no grupo onde for digitado; `!testarbomdia gtavi` mostra a versão Vice City |
+| `!testarbomdia` *(oculto)* | manda o bom dia (com o cartão de previsão) só no grupo onde for digitado; `!testarbomdia gtavi` mostra a versão Vice City; `!testarbomdia status` (só root) também posta o cartão como status do grupo |
 | `!testarnoticias` *(oculto)* | manda uma notícia de games agora só no grupo onde for digitado e, se não mandar, diz o motivo e quais fontes responderam |
 | `!testarestreia` *(oculto)* | manda o cartão da estreia só no grupo onde for digitado (sem marcar todo mundo) |
 | `!testarnuvem` *(oculto)* | manda o cartão da nuvem de palavras de hoje só no grupo onde for digitado |
 | `!resumosemanal` *(oculto)* | manda o resumo semanal (cartão) só no grupo onde for digitado |
 | `!testaraniversario [nome]` *(oculto)* | manda o cartão de aniversário só no grupo onde for digitado (do nome informado, ou do próximo aniversariante) |
 
-**Perguntar dados do grupo:** mencione **@Bothierry** com uma pergunta ("quantas vezes o Fulano ficou no top 3?"). A IA só escolhe entre consultas reais nos dados, nunca inventa.
+**Falar com o bot:** mencione **@Bothierry** (ou responda a uma mensagem dele). Exemplos: "quantas vezes o Fulano ficou no top 3?", "quanto tá o dólar?", "previsão pra Santos amanhã", "como foi o jogo do Palmeiras?", "me lembra sexta às 20h de comprar o ingresso", "lembra que meu time é o Santos", "por que você tirou o Guima do grupo?", ou uma foto com "@Bothierry o que é isso?". Ele responde em *reply* na sua mensagem. Dado do grupo, cotação, tempo, placar e notícia vêm **de funções reais**, nunca da cabeça da IA (veja [3.4](#34-uma-pergunta-ao-bot-agente-de-ia)).
+
+### Detalhes do agente de IA e dos recursos do bot
 
 **O bot lembra o que ele fez (`src/botLog.js`, `src/bot/groupEvents.js`, `src/insultHistory.js`):** as mensagens do próprio bot não entram no histórico do grupo, então antes ele não sabia que tinha expulsado alguém e respondia "não vi nada". Agora (1) o **diário de ações** (`bot_actions.jsonl`, só na VM, entra no backup) registra avisos e expulsões por insulto com o que a pessoa disse (a expulsão guarda os 3 insultos e se a remoção deu certo ou não), regras avisadas (com quem quebrou) e quem entrou/saiu/foi removido (evento `group-participants.update`); as ações das últimas 72 h entram **sempre** no prompt como "a verdade sobre o que você fez", e a função `acoes_do_bot` consulta o resto (apelido vira nome pelo `apelidos.txt`); sem registro, o prompt manda dizer "não tenho registro" e nunca negar que aconteceu. (2) O **histórico permanente de insultos** (`insult_history.json`, nunca podado, no backup) guarda cada insulto (até 100 textos por pessoa) e cada expulsão que deu certo, mesmo depois do contador de 3 strikes zerar: `!insultos` mostra o quadro, a função `historico_insultos` responde "quantas vezes o Fulano já foi expulso?" e o perfil no painel ganhou o cartão *Insultos ao bot*. Pra registrar à mão uma expulsão anterior ao histórico: `node --env-file=.env scripts/registrar-expulsao.js "Nome" [insultos] ["AAAA-MM-DD HH:MM"]`.
 
@@ -395,6 +473,9 @@ Use `!` ou `/` no começo. `!menu` lista tudo no próprio WhatsApp (e a aba **Co
 - **Regras do grupo** (`regras/*.txt`): frases-gatilho cadastradas disparam a intervenção; a **Regra 93 (iPhone)** usa IA pra julgar o tom.
 - **Insulto ao bot** (mencionando @Bothierry): a IA classifica — 1º e 2º viram aviso, o **3º resulta em remoção do grupo** (ação real e irreversível pelo bot).
 - **Marcos do dia:** avisa quando alguém bate exatamente 50 ou 100 mensagens.
+- **Lembretes:** os que alguém pediu ao bot saem sozinhos no horário, marcando a pessoa.
+- **Status de grupo automático:** o cartão da previsão (bom dia) e o de aniversário também viram status do grupo (`GROUP_STATUS_AUTO`).
+- **Diário do bot:** avisos, expulsões, regras avisadas e quem entra/sai do grupo são registrados sozinhos (o bot consulta isso pra explicar o que fez).
 - **Aniversários:** manda um **cartão com a foto** do aniversariante (resolução cheia do WhatsApp; se a privacidade bloquear, usa a do cache ou a inicial do nome) e renomeia o grupo pra `🎉 Parabéns, Nome! 🎂` às 9h e volta ao nome que ele tinha antes na meia-noite (precisa ser admin do grupo).
 - **Foto temática do bot** em datas comemorativas (Natal, Ano Novo, Halloween, Carnaval, Páscoa, Festa Junina), com imagens de `avatarbot/` (na VM) ou, se o arquivo não estiver lá, de `assets/themes/` (vai junto com o repositório — é o caso do tema **GTAVI**, de 18 a 20/11/2026).
 
@@ -447,6 +528,9 @@ ssh -i <chave> ubuntu@<ip-da-vm> "cd ~/bothierry && node --check src/index.js &&
 - **Checagem antes do deploy (CI):** o GitHub roda `npm run check` (ESLint: variável indefinida, chave repetida…) e `npm test` (testes em `test/`) em todo PR e push na `main` (`.github/workflows/ci.yml`). Rode os dois localmente antes de abrir PR.
 - **Aviso de queda (monitor externo):** `https://painel.bothierry.com.br/health` responde `200 {"status":"ok"}` com o WhatsApp conectado e `503` (`desconectado`/`deslogado`) quando cai. Cadastre essa URL num monitor gratuito (ex.: UptimeRobot, tipo *HTTP(s)*, intervalo de 5 min, alerta por e-mail/app) pra ser avisado — o monitor também avisa se o painel/VM inteiro sair do ar.
 - **Backup:** todo dia às 03h40 (`src/backup.js`) os dados que não estão no git viram `backups/bothierry-AAAA-MM-DD.tar.gz` (7 mais recentes). **`.env` e `auth_info/` ficam de fora de propósito** (dão acesso à conta e ao número; são fáceis de refazer). Pra ter uma cópia **fora da VM**, instale o `rclone`, configure um destino (ex.: Google Drive) e ponha `BACKUP_RCLONE_REMOTE=gdrive:bothierry-backups` no `.env` — o bot copia e apaga lá o que tiver mais de 15 dias (use uma pasta só pra isso). Pra restaurar: `tar -xzf backups/bothierry-AAAA-MM-DD.tar.gz` na pasta do projeto, com o bot parado.
+- **Resposta do bot não chegou no WhatsApp:** abra o painel como admin → **Agente → Fila de respostas**: lá aparecem as perguntas não entregues com o motivo, os reenvios e as esperas por reconexão. Se o WhatsApp estava fora, a resposta guardada é reenviada sozinha (30 s, 1, 2 e 5 min); passando de 30 min a pergunta é descartada.
+- **Bot reiniciando sem motivo aparente:** erros inesperados (`unhandledRejection`/`uncaughtException`) agora só são registrados em *Sistema → Erros recentes* em vez de derrubar o processo; 5 erros graves em 1 minuto ainda reiniciam pelo PM2. Veja `pm2 status` (coluna `↺`, reinícios) e `pm2 logs Bothierry --err`.
+- **Função de IA diz "não configurado":** falta `TAVILY_API_KEY` ou `FOOTBALL_DATA_API_KEY` no `.env` (depois de editar, `pm2 restart Bothierry --update-env`). Ao editar o `.env` por comando, **não use `!!`** no bash (é expansão de histórico) e confira com `node --env-file=.env -p "Boolean(process.env.TAVILY_API_KEY)"`.
 - **Sessão deslogada:** o bot guarda a sessão antiga (`auth_info.deslogada-<data>/`, só as 2 últimas) e gera um QR novo sozinho. Entre no painel como **admin → Sistema**: o QR aparece no topo (troca a cada ~20 s); leia em *WhatsApp (celular do bot) → Aparelhos conectados → Conectar um aparelho*. O mesmo QR sai no log (`pm2 logs`). Pra desfazer: pare o bot, apague `auth_info/` e renomeie a pasta guardada de volta.
 - **Memória "RSS" alta no painel:** é normal logo após reconexões (buffers nativos do Baileys). Preocupa só se continuar subindo sem parar — o PM2 reinicia sozinho acima de 750 MB.
 - **Link do `!painel` não chega no privado:** o bot avisa no grupo; peça pra pessoa mandar um "oi" pro bot no privado e tentar de novo.
@@ -459,7 +543,11 @@ ssh -i <chave> ubuntu@<ip-da-vm> "cd ~/bothierry && node --check src/index.js &&
 - **`messages.jsonl` guarda o texto de todas as mensagens** do grupo em texto puro — dado sensível que fica só na VM. Os logs "debug" (que mostram texto de mensagens) são filtrados do painel.
 - **Painel:** login comum + papéis; ações de admin só com `ADMIN_PASS`; links do `!painel` são de uso único, vencem em 5 minutos e só são gastos no clique (a prévia do link não "queima" o acesso).
 - **Não é a API oficial da Meta:** conexão não-oficial; risco baixo de restrição do número, já que o bot só lê e responde a poucos comandos.
-- Troque as senhas do `.env` se alguma vez forem expostas (inclusive em conversas).
+- **IA com limites:** teto de gasto mensal (e por pergunta), no máximo 5 passos por pergunta e 3 perguntas simultâneas; conteúdo vindo da web, de links e de imagens é tratado como **dado, nunca como instrução** (defesa contra *prompt injection*).
+- **Privacidade da memória:** o bot só guarda fatos que a própria pessoa conta ou pede pra anotar, recusa (no código, não só no prompt) saúde, política, religião, dinheiro, endereço, documentos e contatos, e nunca guarda fatos de terceiros. Cada um vê e apaga o que é seu (`!memoria`, `!esquecer`). Imagens enviadas à IA não vão pro disco.
+- **Ações sensíveis:** status de grupo, `!testar*` e variantes de depuração têm modo "só root"; expulsão por insulto fica registrada (com o que foi dito) no diário do bot.
+- **Arquivos pessoais** (memória, lembretes, diário, histórico de insultos, fila, traços) ficam só na VM, no `.gitignore` e no backup local.
+- Troque as senhas do `.env` se alguma vez forem expostas (inclusive em conversas). Nunca cole chaves no chat; use comandos que leem a chave sem mostrar (`read -rsp`).
 
 ---
 
