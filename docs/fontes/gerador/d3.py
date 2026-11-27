@@ -1,0 +1,26 @@
+from lib import Diagram
+W=1400; MX=550; MW=300; RX=1030; RW=330; H_=96; STEP=136; Y0=170
+y=lambda i: Y0+i*STEP
+d=Diagram(W, Y0+9*STEP+30, 'Deploy', 'automático', 'Merge na main → em até 3 minutos a VM se atualiza sozinha (e volta atrás se algo falhar).')
+d.node('A',MX,y(0),MW,H_,'👩‍💻 Mudança no código','Pull Request + CI (eslint e testes)')
+d.node('B',MX,y(1),MW,H_,'🐙 GitHub — branch main','o que está no ar','ci')
+d.node('C',MX,y(2),MW,H_,'⏱ Cron na VM','a cada 3 minutos')
+d.node('D',MX,y(3),MW,H_,'deploy.sh','git fetch','hot')
+d.node('E',MX,y(4),MW,H_,'Commit novo?','','dec')
+d.node('Z',RX,y(4),RW,H_,'nada a fazer','','end')
+d.node('F',MX,y(5),MW,H_,'git reset --hard origin/main')
+d.node('G',MX,y(6),MW,H_,'package.json mudou?','','dec')
+d.node('G1',RX,y(6),RW,H_,'npm install','','ext')
+d.node('H',MX,y(7),MW,H_,'node --check dos .js','src/, src/bot/ e scripts/')
+d.node('I',MX,y(8),MW,H_,'Sintaxe ok?','','dec')
+d.node('J',60,y(8)+1,330,H_,'volta pro commit anterior','NÃO reinicia: o bot segue no ar','warn')
+d.node('K',RX,y(8),RW,H_,'✅ pm2 restart Bothierry','versão nova no ar','hot')
+d.edge('A','b','B','t','merge')
+for a,b,l in [('B','C',None),('C','D',None),('D','E',None),('E','F','sim'),('F','G',None),('G','H','não'),('H','I',None)]:
+    d.edge(a,'b',b,'t',l)
+d.edge('E','r','Z','l','não')
+d.edge('G','r','G1','l','sim')
+d.edge('G1','b','H','r','segue',dash=True,via=[(RX+RW/2,y(7)+H_/2)],lpos=(RX+RW/2-130,y(7)+H_/2))
+d.edge('I','l','J','r','não')
+d.edge('I','r','K','l','sim')
+d.render('d3.html')

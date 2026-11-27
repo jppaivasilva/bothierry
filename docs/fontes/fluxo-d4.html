@@ -1,0 +1,26 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=1400"><style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0f1d1a;color:#e9f5f1;font-family:-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;position:relative;overflow:hidden}
+h1{position:absolute;left:40px;top:28px;font-size:48px;font-weight:800;letter-spacing:-1px}
+h1 span{color:#3ddc97}
+.sub{position:absolute;left:40px;top:92px;font-size:22px;color:#9fc4b8}
+.b{position:absolute;background:#173028;border:2px solid #25503f;border-radius:18px;padding:10px 14px;display:flex;flex-direction:column;justify-content:center;text-align:center}
+.b b{font-size:22px;line-height:1.18}
+.b small{font-size:16.5px;color:#a9d1c4;margin-top:5px;line-height:1.25}
+.b.hot{background:#1f4a39;border-color:#3ddc97}
+.b.ext{background:#1b2a3a;border-color:#3b5f86}
+.b.dec{background:#2a2a14;border-color:#c9b43c}
+.b.end{background:#1c2623;border-color:#3d4f49;border-style:dashed}
+.b.end b,.b.end small{color:#9fb5ad}
+.b.warn{background:#33201d;border-color:#d9776a}
+.b.store{background:#1b2d35;border-color:#3a7f93}
+.arrows{position:absolute;left:0;top:0;pointer-events:none}
+.lab{position:absolute;font-size:16px;color:#bfe3d6;white-space:nowrap;background:#0f1d1a;padding:1px 9px;border-radius:9px;transform:translate(-50%,-50%);line-height:1.25}
+.lab.alt{color:#ffe08a}
+.num{position:absolute;width:34px;height:34px;border-radius:50%;background:#3ddc97;color:#0f1d1a;font-weight:800;font-size:20px;display:flex;align-items:center;justify-content:center;transform:translate(-50%,-50%)}
+.note{position:absolute;background:#2a2a14;border:2px solid #c9b43c;border-radius:16px;padding:12px 18px;font-size:19px;color:#fbe7b0;text-align:center;display:flex;align-items:center;justify-content:center}
+.foot{position:absolute;left:40px;font-size:16px;color:#6f9a8c}
+body{width:1400px;height:1172px}</style></head><body><h1>Uma pergunta ao bot <span>(agente de IA)</span></h1><div class="sub">Marcou o @Bothierry ou respondeu a ele? É isto que acontece.</div><div class="b " style="left:550px;top:170px;width:300px;height:96px"><b>💬 @Bothierry ou reply</b><small>pode vir com foto</small></div><div class="b " style="left:550px;top:306px;width:300px;height:96px"><b>Handler só enfileira</b><small>não espera a IA</small></div><div class="b hot" style="left:550px;top:442px;width:300px;height:96px"><b>🗂️ Fila de IA</b><small>máx. 3 ao mesmo tempo · 1 por pessoa</small></div><div class="b " style="left:550px;top:578px;width:300px;height:112px"><b>Monta o prompt</b><small>persona + memória da pessoa + diário do bot + hora e conversa recente</small></div><div class="b hot" style="left:550px;top:730px;width:300px;height:96px"><b>🤖 Agente (agent.js)</b><small>a IA decide o próximo passo</small></div><div class="b ext" style="left:1030px;top:730px;width:330px;height:96px"><b>🔧 Chama funções</b><small>em paralelo, com timeout</small></div><div class="b ext" style="left:1030px;top:866px;width:330px;height:130px"><b>o que ela consulta</b><small>grupo · cotação · tempo · futebol · notícias<br>busca na web · ler link · memória<br>lembretes · diário · insultos</small></div><div class="b " style="left:550px;top:866px;width:300px;height:96px"><b>Resposta</b></div><div class="b hot" style="left:550px;top:1002px;width:300px;height:96px"><b>📤 Fila de envio → WhatsApp</b><small>em reply na mensagem original</small></div><div class="b end" style="left:40px;top:730px;width:330px;height:112px"><b>limites</b><small>5 passos · ~US$ 0,05 por pergunta<br>trava mensal (US$ 10) · traço na aba Agente</small></div><svg class="arrows" width="1400" height="1172" viewBox="0 0 1400 1172" xmlns="http://www.w3.org/2000/svg"><defs>
+<marker id="a" markerUnits="userSpaceOnUse" markerWidth="16" markerHeight="16" refX="13" refY="8" orient="auto"><path d="M1,1 L15,8 L1,15 z" fill="#3ddc97"/></marker>
+<marker id="s" markerUnits="userSpaceOnUse" markerWidth="16" markerHeight="16" refX="3" refY="8" orient="auto-start-reverse"><path d="M1,1 L15,8 L1,15 z" fill="#3ddc97"/></marker></defs>
+<g stroke="#3ddc97" stroke-width="3.2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="700.0,266.0 700.0,306.0" marker-end="url(#a)"/><polyline points="700.0,402.0 700.0,442.0" marker-end="url(#a)"/><polyline points="700.0,538.0 700.0,578.0" marker-end="url(#a)"/><polyline points="700.0,690.0 700.0,730.0" marker-end="url(#a)"/><polyline points="700.0,962.0 700.0,1002.0" marker-end="url(#a)"/><polyline points="700.0,826.0 700.0,866.0" marker-end="url(#a)"/><polyline points="850.0,760.0 1030.0,760.0" marker-end="url(#a)"/><polyline points="1030.0,796.0 850.0,796.0" marker-end="url(#a)" stroke-dasharray="9 7"/><polyline points="370.0,786.0 460.0,786.0 460.0,778.0 550.0,778.0" marker-end="url(#a)" stroke-dasharray="9 7"/><polyline points="1195.0,826.0 1195.0,866.0" marker-end="url(#a)" stroke-dasharray="9 7"/></g></svg><div class="lab" style="left:700px;top:846px">pronto</div><div class="lab" style="left:940px;top:738px">precisa de dado</div><div class="lab" style="left:940px;top:818px">resultado</div><div class="lab" style="left:415px;top:786px">protege</div></body></html>
