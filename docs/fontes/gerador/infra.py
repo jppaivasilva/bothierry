@@ -22,9 +22,9 @@ box(cx[2],ry[1],cw,ch,'⏰ Rotinas (cron)','bom dia, aniversário, lembretes, st
 box(cx[0],ry[2],cw,ch,'🚇 cloudflared','túnel de saída, sem porta aberta')
 box(cx[1],ry[2],cw,ch,'⚙️ Node.js + PM2','mantém o bot sempre ligado')
 box(cx[2],ry[2],cw,ch,'🔄 deploy.sh','atualiza e volta atrás se falhar')
-box(730,700,780,115,'💾 Dados locais (arquivos)','mensagens · memória · lembretes · diário do bot · sessão do WhatsApp<br><span class="ok">✅ backup diário: 7 cópias na VM + cópia no Google Drive</span>','store')
+box(730,700,780,115,'💾 Dados locais (arquivos)','mensagens · memória · lembretes · diário do bot · sessão do WhatsApp<br><span class="ok">✅ backup diário (7 na VM) + Google Drive: mensal e histórico para sempre</span>','store')
 
-ex=[('🧠 OpenAI','chat · imagens · áudio'),('🔎 Tavily','busca na web'),('⛅ Open-Meteo','previsão do tempo'),('📈 Yahoo Finance','cotações'),('⚽ football-data','placares de futebol'),('📰 RSS','IGN · Canaltech · G1'),('☁️ Google Drive','cópia diária do backup')]
+ex=[('🧠 OpenAI','chat · imagens · áudio'),('🔎 Tavily','busca na web'),('⛅ Open-Meteo','previsão do tempo'),('📈 Yahoo Finance','cotações'),('⚽ football-data','placares de futebol'),('📰 RSS','IGN · Canaltech · G1'),('☁️ Google Drive','diários · mensais · histórico')]
 EXX=1650; EXW=230; EY0=205; EH=78; EG=10
 for i,(t,s) in enumerate(ex):
     box(EXX,EY0+i*(EH+EG),EXW,EH,t,s,'ext')

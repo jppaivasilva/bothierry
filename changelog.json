@@ -425,8 +425,13 @@
   "resumo": "Os fluxogramas do README (caminho de uma mensagem, login no painel, deploy automático, agente de IA e fila de envio) foram refeitos como imagens no mesmo visual do infográfico da infraestrutura: fundo verde-escuro, caixas arredondadas, setas menta, decisões em amarelo e falhas em vermelho. Os fontes e o gerador ficam em docs/fontes para refazer quando algo mudar."
  },
  {
-  "pr": 87,
+  "pr": 89,
   "titulo": "Backup no Google Drive ativado",
   "resumo": "A cópia noturna do backup agora também vai pro Google Drive (rclone, escopo drive.file, pasta bothierry-backups; 15 dias lá, 7 na VM). O README ganhou o passo a passo de configuração, a variável BACKUP_RCLONE_REMOTE e a restauração, e o infográfico da infraestrutura mostra o Drive como serviço externo e o backup como ativo. O gerador do infográfico passou a ficar em docs/fontes."
+ },
+ {
+  "pr": 90,
+  "titulo": "Backup: histórico permanente e um completo por mês",
+  "resumo": "O backup no Google Drive agora tem três camadas: os diários completos (15 dias, só os arquivos de backup do nível de cima), o primeiro backup de cada mês guardado para sempre e o histórico de mensagens (archive/) copiado de forma incremental e permanente, que nunca é apagado. Se um arquivo de histórico local ficar menor que o do Drive (truncamento ou corrupção), ele não sobrescreve a cópia boa e o aviso aparece em Erros recentes. Antes, qualquer problema no histórico local passaria pra todos os backups em 15 dias."
  }
 ]

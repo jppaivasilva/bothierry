@@ -152,8 +152,10 @@ cron.schedule(
     recordCronRun('backup');
     try {
       const r = await runBackup();
-      console.log(`💾 Backup: ${r.file ? `${(r.bytes / 1024 / 1024).toFixed(1)} MB, ${r.paths} itens` : r.note}${r.remote ? ' (copiado pro rclone)' : ''}`);
+      console.log(`💾 Backup: ${r.file ? `${(r.bytes / 1024 / 1024).toFixed(1)} MB, ${r.paths} itens` : r.note}${r.remote ? ' (copiado pro rclone)' : ''}${r.monthly === 'criado' ? ' · backup mensal guardado' : ''}${r.historico?.enviados?.length ? ` · historico: ${r.historico.enviados.length} arquivo(s) enviado(s)` : ''}`);
       if (r.remoteError) console.error(`Erro ao copiar o backup pro rclone (a copia local foi feita): ${r.remoteError}`);
+      if (typeof r.monthly === 'string' && r.monthly.startsWith('erro')) console.error(`Erro no backup mensal: ${r.monthly}`);
+      for (const msg of [...(r.historico?.alertas || []), ...(r.historico?.erros || [])]) console.error(`Backup do historico (archive/): ${msg}`);
     } catch (err) {
       console.error('Erro ao fazer o backup noturno:', err);
     }
