@@ -16,7 +16,7 @@ O armazenamento é um conjunto de arquivos de texto (`messages.jsonl` etc.) em v
 
 ![Infraestrutura do Bothierry: celulares ↔ WhatsApp ↔ Baileys na VM da Oracle (handler, agente de IA, fila de envio, rotinas, painel, cloudflared, PM2, deploy) com serviços externos e o caminho de deploy via GitHub](docs/infraestrutura.png)
 
-*Infraestrutura em uma imagem (o diagrama abaixo mostra as mesmas peças em formato editável). Os fluxogramas da [seção 3](#3-fluxos) seguem o mesmo estilo visual; os fontes e o gerador estão em `docs/fontes/`.*
+*Infraestrutura em uma imagem (o diagrama abaixo mostra as mesmas peças em formato editável). Os fluxogramas da [seção 3](#3-fluxos) seguem o mesmo estilo visual; os fontes e o gerador (inclusive deste infográfico) estão em `docs/fontes/`.*
 
 Visão geral de quem fala com quem:
 
@@ -197,6 +197,7 @@ Tudo em arquivos na pasta do projeto, **na VM** (a maioria está no `.gitignore`
 | `.env` | chaves e senhas (veja [seção 8](#8-configuração-env)) | não |
 | `messages.jsonl` | mensagens dos últimos **14 dias** ("janela quente", uma linha JSON por mensagem, texto incluso) | não |
 | `archive/messages-AAAA-MM.jsonl` | mensagens mais antigas, um arquivo por mês (arquiva ao iniciar e todo dia às 03h) | não |
+| `backups/` | backups diários `.tar.gz` (7 mais recentes); cópia também no Google Drive (15 dias) | não |
 | `metrics.jsonl` | métricas do painel, 30 dias de retenção | não |
 | `events.json` | eventos, confirmados e ausentes | não |
 | `birthdays.json`, `apelidos.txt` | aniversariantes e apelidos | não |
@@ -263,6 +264,7 @@ Além disso, ao conectar o bot checa aniversário, nome do grupo, tema da foto e
 | **BrasilAPI** | feriados nacionais | não |
 | **TSE** | apuração das eleições | não |
 | **Cloudflare** | túnel HTTPS e DNS do painel | conta Cloudflare |
+| **Google Drive** (via `rclone`) | cópia diária do backup fora da VM (escopo `drive.file`, pasta `bothierry-backups`) | token do `rclone` na VM (`~/.config/rclone/`) |
 | **GitHub** (repositório e Actions) | código, PRs e testes automáticos antes do deploy | não |
 | **UptimeRobot** | monitor externo do `/health` | conta UptimeRobot |
 | **Chart.js** (CDN jsDelivr) | gráficos do painel, carregado no navegador | não |
@@ -280,6 +282,7 @@ Arquivo `.env` na raiz do projeto, **só na VM** (nunca no git). O PM2 o carrega
 | `OPENAI_API_KEY` | chave da OpenAI (resumo, transcrição, IA, imagens) |
 | `DASHBOARD_USER` / `DASHBOARD_PASS` | login comum do painel (perfil **viewer**). Se `DASHBOARD_PASS` ficar vazia, o painel fica **aberto sem login** |
 | `ADMIN_USER` / `ADMIN_PASS` | login de **administrador** do painel (`ADMIN_USER` padrão: `root`). Sem `ADMIN_PASS`, ninguém entra como admin |
+| `BACKUP_RCLONE_REMOTE` | destino do `rclone` pra cópia do backup fora da VM (ex.: `gdrive:bothierry-backups`); sem ela, o backup fica só na VM |
 | `DASHBOARD_HOST` | `127.0.0.1` faz o painel responder só localmente (acesso de fora só pelo túnel) |
 | `AI_MONTHLY_BUDGET_USD` | teto mensal de gasto com IA (padrão `10`; `0` desliga). Passou, a IA pausa até o dia 1º |
 | `TAVILY_API_KEY` | busca na web e leitura de links (opcional) |
@@ -445,10 +448,11 @@ ssh -i <chave> ubuntu@<ip-da-vm> "cd ~/bothierry && node --check src/index.js &&
 - **Painel só pelo túnel (HTTPS):** com `DASHBOARD_HOST=127.0.0.1` no `.env` o painel só responde à própria VM, e o único caminho de fora passa a ser o túnel do Cloudflare (`https://painel.bothierry.com.br`). Antes de ligar, confirme que o túnel aponta pra `http://localhost:4321`; depois, feche também a porta 4321 no firewall da Oracle (Security List).
 - **Checagem antes do deploy (CI):** o GitHub roda `npm run check` (ESLint: variável indefinida, chave repetida…) e `npm test` (testes em `test/`) em todo PR e push na `main` (`.github/workflows/ci.yml`). Rode os dois localmente antes de abrir PR.
 - **Aviso de queda (monitor externo):** `https://painel.bothierry.com.br/health` responde `200 {"status":"ok"}` com o WhatsApp conectado e `503` (`desconectado`/`deslogado`) quando cai. Cadastre essa URL num monitor gratuito (ex.: UptimeRobot, tipo *HTTP(s)*, intervalo de 5 min, alerta por e-mail/app) pra ser avisado — o monitor também avisa se o painel/VM inteiro sair do ar.
-- **Backup:** todo dia às 03h40 (`src/backup.js`) os dados que não estão no git viram `backups/bothierry-AAAA-MM-DD.tar.gz` (7 mais recentes). **`.env` e `auth_info/` ficam de fora de propósito** (dão acesso à conta e ao número; são fáceis de refazer). Pra ter uma cópia **fora da VM**, instale o `rclone`, configure um destino (ex.: Google Drive) e ponha `BACKUP_RCLONE_REMOTE=gdrive:bothierry-backups` no `.env` — o bot copia e apaga lá o que tiver mais de 15 dias (use uma pasta só pra isso). Pra restaurar: `tar -xzf backups/bothierry-AAAA-MM-DD.tar.gz` na pasta do projeto, com o bot parado.
+- **Backup (ativo, com cópia no Google Drive):** todo dia às 03h40 (`src/backup.js`) os dados que não estão no git viram `backups/bothierry-AAAA-MM-DD.tar.gz` (7 mais recentes na VM) e, com `BACKUP_RCLONE_REMOTE=gdrive:bothierry-backups` no `.env`, o arquivo também é copiado pro **Google Drive** com o `rclone` (o bot apaga lá o que tiver mais de 15 dias; use uma pasta só pra isso). **`.env` e `auth_info/` ficam de fora de propósito** (dão acesso às contas e ao número; são fáceis de refazer) — guarde uma cópia do `.env` num gerenciador de senhas. Pra restaurar: baixe o `.tar.gz` (da VM ou do Drive) e rode `tar -xzf bothierry-AAAA-MM-DD.tar.gz` na pasta do projeto, com o bot parado. Pra testar na hora: `node --env-file=.env -e "import('./src/backup.js').then(async m=>console.log(await m.runBackup()))"` (mostra o arquivo, o tamanho e `remote: true` se copiou pro Drive).
 - **Resposta do bot não chegou no WhatsApp:** abra o painel como admin → **Agente → Fila de respostas**: lá aparecem as perguntas não entregues com o motivo, os reenvios e as esperas por reconexão. Se o WhatsApp estava fora, a resposta guardada é reenviada sozinha (30 s, 1, 2 e 5 min); passando de 30 min a pergunta é descartada.
 - **Bot reiniciando sem motivo aparente:** erros inesperados (`unhandledRejection`/`uncaughtException`) agora só são registrados em *Sistema → Erros recentes* em vez de derrubar o processo; 5 erros graves em 1 minuto ainda reiniciam pelo PM2. Veja `pm2 status` (coluna `↺`, reinícios) e `pm2 logs Bothierry --err`.
 - **Função de IA diz "não configurado":** falta `TAVILY_API_KEY` ou `FOOTBALL_DATA_API_KEY` no `.env` (depois de editar, `pm2 restart Bothierry --update-env`). Ao editar o `.env` por comando, **não use `!!`** no bash (é expansão de histórico) e confira com `node --env-file=.env -p "Boolean(process.env.TAVILY_API_KEY)"`.
+- **Configurar a cópia no Google Drive (uma vez):** na VM, `sudo apt-get install -y rclone` e `rclone config` → `n`, nome `gdrive`, tipo `drive`, `client_id`/`client_secret` em branco, escopo **`drive.file`** (o rclone só enxerga o que ele mesmo criar; o resto do Drive fica fora do alcance), avançado `n` e **auto config `n`** (a VM não tem navegador). Ele mostra um comando `rclone authorize "drive" "…"`: rode **no seu computador** (com o rclone instalado e um navegador), entre na conta Google e autorize; cole o token que ele imprimir no prompt `config_token>` da VM, responda `n` pra *team drive*, `y` e `q`. Teste com `rclone mkdir gdrive:bothierry-backups` e `rclone lsd gdrive:`, ponha `BACKUP_RCLONE_REMOTE=gdrive:bothierry-backups` no `.env` e `pm2 restart Bothierry --update-env`. **O token fica em `~/.config/rclone/rclone.conf` na VM (dá acesso à pasta de backup): nunca o cole em chat ou no git.**
 - **Sessão deslogada:** o bot guarda a sessão antiga (`auth_info.deslogada-<data>/`, só as 2 últimas) e gera um QR novo sozinho. Entre no painel como **admin → Sistema**: o QR aparece no topo (troca a cada ~20 s); leia em *WhatsApp (celular do bot) → Aparelhos conectados → Conectar um aparelho*. O mesmo QR sai no log (`pm2 logs`). Pra desfazer: pare o bot, apague `auth_info/` e renomeie a pasta guardada de volta.
 - **Memória "RSS" alta no painel:** é normal logo após reconexões (buffers nativos do Baileys). Preocupa só se continuar subindo sem parar — o PM2 reinicia sozinho acima de 750 MB.
 - **Link do `!painel` não chega no privado:** o bot avisa no grupo; peça pra pessoa mandar um "oi" pro bot no privado e tentar de novo.
