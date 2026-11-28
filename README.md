@@ -8,7 +8,7 @@ Não usa a API oficial da Meta: conecta como se fosse o "WhatsApp Web" de um nú
 
 O armazenamento é um conjunto de arquivos de texto (`messages.jsonl` etc.) em vez de um banco de dados — de propósito, pra não depender de nenhum pacote com código nativo e caber numa VM pequena.
 
-**Índice:** [Arquitetura](#1-arquitetura) · [Hospedagem](#2-onde-e-como-roda-hospedagem) · [Fluxos](#3-fluxos) · [Módulos](#4-módulos-do-código) · [Dados](#5-dados-e-armazenamento) · [Tarefas agendadas](#6-tarefas-agendadas) · [Integrações](#7-integrações-externas) · [Configuração](#8-configuração-env) · [Painel](#9-painel-web) · [Comandos](#10-comandos-do-bot) · [Automações](#11-automações-sem-comando) · [Operação](#12-operação-no-dia-a-dia) · [Segurança](#13-segurança-e-privacidade) · [Local](#14-rodando-localmente)
+**Índice:** [Arquitetura](#1-arquitetura) · [Hospedagem](#2-onde-e-como-roda-hospedagem) · [Fluxos](#3-fluxos) · [Módulos](#4-módulos-do-código) · [Dados](#5-dados-e-armazenamento) · [Tarefas agendadas](#6-tarefas-agendadas) · [Integrações](#7-integrações-externas) · [Configuração](#8-configuração-env) · [Painel](#9-painel-web) · [Comandos](#10-comandos-do-bot) · [Automações](#11-automações-sem-comando) · [Operação](#12-operação-no-dia-a-dia) · [Backup](#backup-e-restauração) · [Segurança](#13-segurança-e-privacidade) · [Local](#14-rodando-localmente)
 
 ---
 
@@ -115,6 +115,12 @@ O agente roda em **laço**: a IA chama funções, olha o resultado e decide se p
 ![Fluxograma da fila de respostas e do envio confiável: IA com retry e contingência, espera de reconexão, reenvio, resposta guardada e descarte após 30 minutos](docs/fluxo-fila-envio.png)
 
 Se o bot reiniciar, as perguntas pendentes **voltam da fila** (`ai_queue.json`); pergunta com mais de 30 min é descartada em vez de responder fora de hora. A aba **Agente** mostra a fila (na fila, enviadas, não entregues, reenvios, esperas por reconexão). Detalhes na [seção 10](#10-comandos-do-bot).
+
+### 3.6. Backup noturno
+
+![Fluxograma do backup noturno: cron às 03h40, backup completo em .tar.gz, 7 cópias na VM e, com o Drive configurado, três camadas: diário (15 dias), mensal (para sempre) e histórico de mensagens incremental, que nunca apaga e não envia arquivo menor que o do Drive](docs/fluxo-backup.png)
+
+Detalhes de cada camada, como ligar o Google Drive, como conferir e como restaurar: [Backup e restauração](#backup-e-restauração).
 
 ---
 
@@ -235,7 +241,7 @@ Todas dentro do processo do bot (`node-cron`, fuso `America/Sao_Paulo`, tolerân
 | 00:01 | sincroniza o nome do grupo (reverte renomeações do dia anterior) |
 | 03:00 | arquiva mensagens antigas e poda métricas |
 | 03:30 | troca a foto do bot se o tema mudou; sincroniza fotos de perfil |
-| 03:40 | **backup** local dos dados (`backups/`, 7 mais recentes) |
+| 03:40 | **backup**: completo em `backups/` (7 mais recentes) + no Google Drive o diário (15 dias), o mensal e o histórico de mensagens (veja [Backup e restauração](#backup-e-restauração)) |
 | 08:00 (seg–sex; mais as datas extras de fim de semana em `morning.js`) | bom dia + feriado nacional + **cartão de previsão do tempo** (imagem; se falhar, vai em texto), que também sai como **status do grupo** |
 | 08:00 (seg e qua) | atualiza a foto do grupo com a notícia do dia (via IA) |
 | 09:00 | aviso de aniversariantes (**cartão em imagem** com a foto; texto se falhar) + renomeia o grupo; o cartão também vira **status do grupo** |
@@ -442,17 +448,97 @@ ssh -i <chave> ubuntu@<ip-da-vm> "cd ~/bothierry && node --check src/index.js &&
 
 (sempre rode `node --check` antes do restart). O IP está no console da Oracle; o acesso SSH usa a chave privada gerada na criação da instância — guarde-a em lugar seguro.
 
+### Backup e restauração
+
+![Fluxograma do backup noturno: cron às 03h40, backup completo em .tar.gz, 7 cópias na VM e, com o Drive configurado, três camadas: diário (15 dias), mensal (para sempre) e histórico de mensagens incremental, que nunca apaga e não envia arquivo menor que o do Drive](docs/fluxo-backup.png)
+
+Todo dia às **03h40** (`src/backup.js`) o bot empacota os dados que **não estão no git** num único `backups/bothierry-AAAA-MM-DD.tar.gz` e guarda as **7 mais recentes na VM**. É um backup **completo** por dia (não incremental): cada arquivo restaura tudo sozinho. Com o Google Drive ligado, o bot cuida de três camadas lá (`rclone`):
+
+| Camada | Onde no Drive (`bothierry-backups/`) | Por quanto tempo | Protege contra |
+| --- | --- | --- | --- |
+| **Diário** | `bothierry-AAAA-MM-DD.tar.gz` (raiz) | 15 dias (a limpeza olha só a raiz e só `bothierry-*.tar.gz`) | erro recente: voltar a um dia específico |
+| **Mensal** | `mensais/bothierry-AAAA-MM.tar.gz` — o **1º backup de cada mês** | **para sempre** | problema notado tarde (meses depois) |
+| **Histórico de mensagens** | `historico/archive/messages-AAAA-MM.jsonl` | **para sempre, nunca apaga** | perda ou corrupção do histórico (`archive/`) |
+
+O **histórico** é copiado de forma **incremental**: só envia arquivo **novo** ou que **cresceu** (o do mês corrente recebe mensagens todo dia). Se um arquivo local aparecer **menor** que o do Drive — sinal de truncamento ou corrupção —, ele **não é enviado**: a cópia boa fica intacta e o aviso aparece em *Sistema → Erros recentes*. Falha numa camada não derruba as outras.
+
+**O que entra:** mensagens (`messages.jsonl` e `archive/`), eventos, aniversários e fotos, áudios, regras e textos fixos, memória, lembretes, diário do bot, histórico de insultos, consumo da OpenAI, métricas, fotos em cache e estados internos (a lista está em `DATA_PATHS`, em `src/backup.js`). **O que fica de fora, de propósito:** `.env` (chaves) e `auth_info/` (sessão do WhatsApp) — dão acesso às contas e ao número e são fáceis de refazer; o código (está no git) e a própria pasta `backups/`. **Guarde uma cópia do `.env` num gerenciador de senhas.**
+
+#### Ligar a cópia no Google Drive (uma vez)
+
+Você precisa de uma conta Google em que consiga entrar num navegador. O escopo **`drive.file`** limita o `rclone` aos arquivos que ele mesmo criar: o resto do seu Drive fica fora do alcance do bot.
+
+1. Na VM: `sudo apt-get install -y rclone` e abra o assistente com `rclone config`.
+2. Responda: `n` (novo) → nome `gdrive` → tipo `drive` → `client_id` e `client_secret` **em branco** (Enter) → escopo **`drive.file`** (a opção "Access to files created by rclone only", em geral a 3) → `root_folder_id` e `service_account_file` em branco → avançado `n` → **autoconfig `n`** (a VM não tem navegador).
+3. Ele mostra `rclone authorize "drive" "…"`. Rode essa linha **no seu computador** (precisa do rclone instalado e de um navegador, ex.: `brew install rclone`), entre na conta Google e autorize. O terminal imprime um **token** entre chaves.
+4. Cole o token no prompt `config_token>` da VM; responda `n` para *team drive*, `y` para manter o remote e `q` para sair.
+5. Teste e ligue no bot:
+
+```bash
+rclone mkdir gdrive:bothierry-backups
+rclone lsd gdrive:                      # a pasta bothierry-backups deve aparecer
+cd ~/bothierry && echo "BACKUP_RCLONE_REMOTE=gdrive:bothierry-backups" >> .env
+pm2 restart Bothierry --update-env
+```
+
+O token fica em `~/.config/rclone/rclone.conf` na VM e dá acesso à pasta de backup: **nunca o cole em chat nem no git** (confira com `chmod 600 ~/.config/rclone/rclone.conf`). Se vazar, revogue o acesso em *myaccount.google.com/permissions* e refaça o `rclone config`. Depois da configuração, o computador usado só pro login não precisa mais do rclone.
+
+#### Conferir que está funcionando
+
+```bash
+# roda um backup agora (mostra o arquivo, o tamanho, remote: true, monthly e o que foi enviado ao historico)
+cd ~/bothierry && node --env-file=.env -e "import('./src/backup.js').then(async m=>console.log(await m.runBackup()))"
+ls -lh ~/bothierry/backups               # as cópias locais (até 7)
+rclone ls gdrive:bothierry-backups       # tudo que está no Drive (diários, mensais/, historico/)
+rclone size gdrive:bothierry-backups     # tamanho total
+pm2 logs Bothierry --lines 300 --nostream | grep -i backup   # linhas "💾 Backup: ..." do cron das 03h40
+```
+
+A aba **Sistema** do painel mostra a última execução do cron `backup`, e erros (Drive fora do ar, arquivo de histórico menor que o do Drive) aparecem em *Erros recentes*. Se `remoteError` vier preenchido, a cópia local foi feita mas o envio ao Drive falhou.
+
+#### Restaurar
+
+Faça sempre com o bot **parado** (`pm2 stop Bothierry`) e suba de novo no fim (`pm2 start Bothierry`).
+
+- **Um arquivo quebrou** (ex.: `events.json`): extraia só ele de um backup e copie de volta.
+
+```bash
+mkdir -p /tmp/restore && tar -xzf ~/bothierry/backups/bothierry-AAAA-MM-DD.tar.gz -C /tmp/restore events.json
+cp /tmp/restore/events.json ~/bothierry/events.json
+```
+
+- **O histórico de mensagens (`archive/`) sumiu ou corrompeu:** traga a cópia permanente do Drive (guarde a atual antes, por segurança).
+
+```bash
+cd ~/bothierry && cp -r archive archive.antes 2>/dev/null
+rclone copy gdrive:bothierry-backups/historico/archive ~/bothierry/archive
+```
+
+- **Perdi a VM inteira:** monte uma VM nova (seções [2](#2-onde-e-como-roda-hospedagem) e [14](#14-rodando-localmente)), clone o repositório, recoloque o `.env` (do gerenciador de senhas), configure o `rclone` de novo (passo a passo acima), baixe o diário mais recente (ou o mensal) e extraia na pasta do projeto; depois traga o histórico. O WhatsApp precisa ser **pareado de novo** (a sessão não vai no backup): o QR aparece no log e no painel (*admin → Sistema*).
+
+```bash
+rclone copy gdrive:bothierry-backups/bothierry-AAAA-MM-DD.tar.gz ~/
+cd ~/bothierry && tar -xzf ~/bothierry-AAAA-MM-DD.tar.gz
+rclone copy gdrive:bothierry-backups/historico/archive ~/bothierry/archive
+```
+
+#### Limites e cuidados
+
+- O histórico só está protegido **desde que a cópia foi ligada**; o que se perdeu antes não volta.
+- Cada backup completo tem hoje ~23 MB e cresce com o histórico; no plano gratuito de 15 GB cabem anos de diários (15), mensais (12 por ano) e histórico.
+- Os backups **não são criptografados** no Drive e incluem o **texto das mensagens do grupo**: use uma conta Google só sua, com verificação em duas etapas, e não compartilhe a pasta.
+- Se o destino do Drive não estiver configurado, o bot continua fazendo só as 7 cópias locais (que somem junto com a VM).
+
 ### Problemas comuns
 
 - **Conexão caindo toda hora (loop de "Conexão fechada", código 440):** quase sempre são **duas instâncias do bot** usando a mesma sessão do WhatsApp (ex.: um processo esquecido no PC). Confirme com `pm2 list` e feche as outras.
 - **Painel só pelo túnel (HTTPS):** com `DASHBOARD_HOST=127.0.0.1` no `.env` o painel só responde à própria VM, e o único caminho de fora passa a ser o túnel do Cloudflare (`https://painel.bothierry.com.br`). Antes de ligar, confirme que o túnel aponta pra `http://localhost:4321`; depois, feche também a porta 4321 no firewall da Oracle (Security List).
 - **Checagem antes do deploy (CI):** o GitHub roda `npm run check` (ESLint: variável indefinida, chave repetida…) e `npm test` (testes em `test/`) em todo PR e push na `main` (`.github/workflows/ci.yml`). Rode os dois localmente antes de abrir PR.
 - **Aviso de queda (monitor externo):** `https://painel.bothierry.com.br/health` responde `200 {"status":"ok"}` com o WhatsApp conectado e `503` (`desconectado`/`deslogado`) quando cai. Cadastre essa URL num monitor gratuito (ex.: UptimeRobot, tipo *HTTP(s)*, intervalo de 5 min, alerta por e-mail/app) pra ser avisado — o monitor também avisa se o painel/VM inteiro sair do ar.
-- **Backup (ativo, com cópia no Google Drive):** todo dia às 03h40 (`src/backup.js`) os dados que não estão no git viram `backups/bothierry-AAAA-MM-DD.tar.gz` — um backup **completo** por dia (não incremental; cada arquivo restaura tudo sozinho), com as 7 mais recentes na VM. Com `BACKUP_RCLONE_REMOTE=gdrive:bothierry-backups` no `.env`, o bot também cuida do **destino no Google Drive** (via `rclone`), em três camadas: **(1) diários** — o completo do dia, na raiz da pasta, apagado depois de 15 dias (a limpeza olha só o nível de cima e só os `bothierry-*.tar.gz`); **(2) `mensais/`** — o **primeiro backup de cada mês é guardado para sempre** (`mensais/bothierry-AAAA-MM.tar.gz`); **(3) `historico/archive/`** — o histórico de mensagens (`archive/`, um arquivo por mês) copiado de forma **incremental e permanente**: só envia arquivo novo ou que cresceu e **nunca apaga nada**; se um arquivo local aparecer *menor* que o do Drive (sinal de truncamento ou corrupção), ele **não é enviado** (a cópia boa fica intacta) e o aviso aparece em *Erros recentes*. Falha numa camada não derruba as outras. **`.env` e `auth_info/` ficam de fora de propósito** (dão acesso às contas e ao número; são fáceis de refazer) — guarde uma cópia do `.env` num gerenciador de senhas. Pra restaurar: baixe o `.tar.gz` mais recente (da VM, do Drive ou o mensal) e rode `tar -xzf bothierry-AAAA-MM-DD.tar.gz` na pasta do projeto, com o bot parado; se só o histórico se perdeu, copie de volta `historico/archive/*` para `archive/`. Pra testar na hora: `node --env-file=.env -e "import('./src/backup.js').then(async m=>console.log(await m.runBackup()))"` (mostra o arquivo, `remote: true`, `monthly` e o que foi enviado ao `historico`).
+- **Backup e restauração:** veja a seção [Backup e restauração](#backup-e-restauração) (três camadas no Google Drive, como ligar, conferir e restaurar).
 - **Resposta do bot não chegou no WhatsApp:** abra o painel como admin → **Agente → Fila de respostas**: lá aparecem as perguntas não entregues com o motivo, os reenvios e as esperas por reconexão. Se o WhatsApp estava fora, a resposta guardada é reenviada sozinha (30 s, 1, 2 e 5 min); passando de 30 min a pergunta é descartada.
 - **Bot reiniciando sem motivo aparente:** erros inesperados (`unhandledRejection`/`uncaughtException`) agora só são registrados em *Sistema → Erros recentes* em vez de derrubar o processo; 5 erros graves em 1 minuto ainda reiniciam pelo PM2. Veja `pm2 status` (coluna `↺`, reinícios) e `pm2 logs Bothierry --err`.
 - **Função de IA diz "não configurado":** falta `TAVILY_API_KEY` ou `FOOTBALL_DATA_API_KEY` no `.env` (depois de editar, `pm2 restart Bothierry --update-env`). Ao editar o `.env` por comando, **não use `!!`** no bash (é expansão de histórico) e confira com `node --env-file=.env -p "Boolean(process.env.TAVILY_API_KEY)"`.
-- **Configurar a cópia no Google Drive (uma vez):** na VM, `sudo apt-get install -y rclone` e `rclone config` → `n`, nome `gdrive`, tipo `drive`, `client_id`/`client_secret` em branco, escopo **`drive.file`** (o rclone só enxerga o que ele mesmo criar; o resto do Drive fica fora do alcance), avançado `n` e **auto config `n`** (a VM não tem navegador). Ele mostra um comando `rclone authorize "drive" "…"`: rode **no seu computador** (com o rclone instalado e um navegador), entre na conta Google e autorize; cole o token que ele imprimir no prompt `config_token>` da VM, responda `n` pra *team drive*, `y` e `q`. Teste com `rclone mkdir gdrive:bothierry-backups` e `rclone lsd gdrive:`, ponha `BACKUP_RCLONE_REMOTE=gdrive:bothierry-backups` no `.env` e `pm2 restart Bothierry --update-env`. **O token fica em `~/.config/rclone/rclone.conf` na VM (dá acesso à pasta de backup): nunca o cole em chat ou no git.**
 - **Sessão deslogada:** o bot guarda a sessão antiga (`auth_info.deslogada-<data>/`, só as 2 últimas) e gera um QR novo sozinho. Entre no painel como **admin → Sistema**: o QR aparece no topo (troca a cada ~20 s); leia em *WhatsApp (celular do bot) → Aparelhos conectados → Conectar um aparelho*. O mesmo QR sai no log (`pm2 logs`). Pra desfazer: pare o bot, apague `auth_info/` e renomeie a pasta guardada de volta.
 - **Memória "RSS" alta no painel:** é normal logo após reconexões (buffers nativos do Baileys). Preocupa só se continuar subindo sem parar — o PM2 reinicia sozinho acima de 750 MB.
 - **Link do `!painel` não chega no privado:** o bot avisa no grupo; peça pra pessoa mandar um "oi" pro bot no privado e tentar de novo.
@@ -468,7 +554,8 @@ ssh -i <chave> ubuntu@<ip-da-vm> "cd ~/bothierry && node --check src/index.js &&
 - **IA com limites:** teto de gasto mensal (e por pergunta), no máximo 5 passos por pergunta e 3 perguntas simultâneas; conteúdo vindo da web, de links e de imagens é tratado como **dado, nunca como instrução** (defesa contra *prompt injection*).
 - **Privacidade da memória:** o bot só guarda fatos que a própria pessoa conta ou pede pra anotar, recusa (no código, não só no prompt) saúde, política, religião, dinheiro, endereço, documentos e contatos, e nunca guarda fatos de terceiros. Cada um vê e apaga o que é seu (`!memoria`, `!esquecer`). Imagens enviadas à IA não vão pro disco.
 - **Ações sensíveis:** status de grupo, `!testar*` e variantes de depuração têm modo "só root"; expulsão por insulto fica registrada (com o que foi dito) no diário do bot.
-- **Arquivos pessoais** (memória, lembretes, diário, histórico de insultos, fila, traços) ficam só na VM, no `.gitignore` e no backup local.
+- **Arquivos pessoais** (memória, lembretes, diário, histórico de insultos, fila, traços) ficam só na VM e no `.gitignore`, e entram no backup.
+- **Backup:** vai pro Google Drive com o escopo `drive.file` (o `rclone` só enxerga o que criou) e **sem criptografia**, com o texto das mensagens — proteja a conta Google (verificação em duas etapas) e o token em `~/.config/rclone/`. `.env` e `auth_info/` nunca entram no backup.
 - Troque as senhas do `.env` se alguma vez forem expostas (inclusive em conversas). Nunca cole chaves no chat; use comandos que leem a chave sem mostrar (`read -rsp`).
 
 ---
