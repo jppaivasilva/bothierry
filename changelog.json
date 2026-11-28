@@ -433,5 +433,10 @@
   "pr": 90,
   "titulo": "Backup: histórico permanente e um completo por mês",
   "resumo": "O backup no Google Drive agora tem três camadas: os diários completos (15 dias, só os arquivos de backup do nível de cima), o primeiro backup de cada mês guardado para sempre e o histórico de mensagens (archive/) copiado de forma incremental e permanente, que nunca é apagado. Se um arquivo de histórico local ficar menor que o do Drive (truncamento ou corrupção), ele não sobrescreve a cópia boa e o aviso aparece em Erros recentes. Antes, qualquer problema no histórico local passaria pra todos os backups em 15 dias."
+ },
+ {
+  "pr": 91,
+  "titulo": "README: seção completa do backup",
+  "resumo": "O README ganhou a seção Backup e restauração: fluxograma no mesmo estilo do infográfico, as três camadas no Google Drive (diário de 15 dias, mensal e histórico de mensagens permanentes), o que entra e o que fica de fora, o passo a passo para ligar o Drive, como conferir que funciona, três cenários de restauração (um arquivo, o histórico, a VM inteira) e os cuidados de segurança. Os parágrafos soltos de Problemas comuns viraram um ponteiro."
  }
 ]
