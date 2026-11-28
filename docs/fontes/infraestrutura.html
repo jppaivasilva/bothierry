@@ -1,0 +1,48 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=1920">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:1920px;height:1080px;background:#0f1d1a;color:#e9f5f1;font-family:-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;position:relative;overflow:hidden}
+h1{position:absolute;left:40px;top:28px;font-size:52px;font-weight:800;letter-spacing:-1px}
+h1 span{color:#3ddc97}
+.sub{position:absolute;left:40px;top:96px;font-size:24px;color:#9fc4b8}
+.b{position:absolute;background:#173028;border:2px solid #25503f;border-radius:18px;padding:12px 14px;display:flex;flex-direction:column;justify-content:center;text-align:center}
+.b b{font-size:23px;line-height:1.15;white-space:nowrap}
+.b small{font-size:16.5px;color:#a9d1c4;margin-top:6px;line-height:1.25}
+.b.hot{background:#1f4a39;border-color:#3ddc97}
+.b.ext{background:#1b2a3a;border-color:#3b5f86}
+.b.ci{background:#2a2a14;border-color:#c9b43c}
+.b.store{background:#1b2d35;border-color:#3a7f93}
+.ok{display:inline-block;margin-top:8px;border:2px solid #3ddc97;border-radius:10px;padding:4px 12px;color:#cfeee2;background:rgba(61,220,151,.10)}
+.vm{position:absolute;border:3px dashed #3ddc97;border-radius:28px;background:rgba(61,220,151,.05)}
+.vmt{position:absolute;top:14px;left:26px;font-size:24px;font-weight:800;color:#3ddc97}
+.arrows{position:absolute;left:0;top:0;pointer-events:none}
+.lab{position:absolute;font-size:15px;color:#9fc4b8;white-space:nowrap}
+.sect{position:absolute;font-size:16px;letter-spacing:2px;font-weight:800;color:#6f9a8c}
+.colt{position:absolute;font-size:16px;letter-spacing:2px;font-weight:800;color:#6f9a8c;text-align:center;text-transform:uppercase}
+.note{position:absolute;left:40px;top:1036px;font-size:17px;color:#6f9a8c}
+</style></head><body>
+<h1>Infraestrutura do <span>Bothierry</span></h1>
+<div class="sub">Um único processo Node.js numa VM na nuvem, ligado ao WhatsApp pelo Baileys e atualizado automaticamente a cada versão aprovada.</div>
+<div class="vm" style="left:700px;top:170px;width:830px;height:670px"><div class="vmt">🖥️ VM na Oracle Cloud · Ubuntu 24.04</div></div>
+<div class="b " style="left:40px;top:250px;width:220px;height:100px"><b>📱 Celulares</b><small>grupo do WhatsApp</small></div><div class="b ext" style="left:370px;top:250px;width:220px;height:100px"><b>WhatsApp (Meta)</b><small>servidores do WhatsApp</small></div><div class="b " style="left:40px;top:560px;width:220px;height:100px"><b>💻 Navegador</b><small>painel web, com login</small></div><div class="b ext" style="left:370px;top:560px;width:220px;height:100px"><b>☁️ Cloudflare</b><small>domínio + túnel seguro</small></div><div class="b hot" style="left:730px;top:250px;width:240px;height:100px"><b>🔌 Baileys</b><small>conexão com o WhatsApp</small></div><div class="b " style="left:1000px;top:250px;width:240px;height:100px"><b>🧠 Handler</b><small>comandos, regras, fotos e menções</small></div><div class="b " style="left:1270px;top:250px;width:240px;height:100px"><b>🤖 Agente de IA</b><small>fila · memória · ferramentas · visão</small></div><div class="b " style="left:730px;top:400px;width:240px;height:100px"><b>📊 Painel web</b><small>só local (127.0.0.1:4321)</small></div><div class="b " style="left:1000px;top:400px;width:240px;height:100px"><b>📤 Fila de envio</b><small>intervalo + reenvio → Baileys</small></div><div class="b " style="left:1270px;top:400px;width:240px;height:100px"><b>⏰ Rotinas (cron)</b><small>bom dia, aniversário, lembretes, status</small></div><div class="b " style="left:730px;top:550px;width:240px;height:100px"><b>🚇 cloudflared</b><small>túnel de saída, sem porta aberta</small></div><div class="b " style="left:1000px;top:550px;width:240px;height:100px"><b>⚙️ Node.js + PM2</b><small>mantém o bot sempre ligado</small></div><div class="b " style="left:1270px;top:550px;width:240px;height:100px"><b>🔄 deploy.sh</b><small>atualiza e volta atrás se falhar</small></div><div class="b store" style="left:730px;top:700px;width:780px;height:115px"><b>💾 Dados locais (arquivos)</b><small>mensagens · memória · lembretes · diário do bot · sessão do WhatsApp<br><span class="ok">✅ backup diário: 7 cópias na VM + cópia no Google Drive</span></small></div><div class="b ext" style="left:1650px;top:205px;width:230px;height:78px"><b>🧠 OpenAI</b><small>chat · imagens · áudio</small></div><div class="b ext" style="left:1650px;top:293px;width:230px;height:78px"><b>🔎 Tavily</b><small>busca na web</small></div><div class="b ext" style="left:1650px;top:381px;width:230px;height:78px"><b>⛅ Open-Meteo</b><small>previsão do tempo</small></div><div class="b ext" style="left:1650px;top:469px;width:230px;height:78px"><b>📈 Yahoo Finance</b><small>cotações</small></div><div class="b ext" style="left:1650px;top:557px;width:230px;height:78px"><b>⚽ football-data</b><small>placares de futebol</small></div><div class="b ext" style="left:1650px;top:645px;width:230px;height:78px"><b>📰 RSS</b><small>IGN · Canaltech · G1</small></div><div class="b ext" style="left:1650px;top:733px;width:230px;height:78px"><b>☁️ Google Drive</b><small>cópia diária do backup</small></div><div class="colt" style="left:1630px;top:165px;width:270px">Serviços externos</div><div class="b " style="left:40px;top:905px;width:230px;height:105px"><b>👩‍💻 Código</b><small>dono + Claude Code</small></div><div class="b " style="left:340px;top:905px;width:230px;height:105px"><b>🐙 GitHub</b><small>pull request na main</small></div><div class="b ci" style="left:640px;top:905px;width:250px;height:105px"><b>✅ GitHub Actions</b><small>eslint + testes automáticos</small></div><div class="b " style="left:960px;top:905px;width:230px;height:105px"><b>🔀 Merge</b><small>só com testes verdes</small></div><div class="b hot" style="left:1260px;top:905px;width:270px;height:105px"><b>🖥️ VM busca a versão</b><small>verifica, instala e reinicia</small></div><div class="b ext" style="left:1650px;top:905px;width:230px;height:105px"><b>🩺 UptimeRobot</b><small>avisa se /health cair</small></div>
+<svg class="arrows" width="1920" height="1080" viewBox="0 0 1920 1080" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<marker id="a" markerUnits="userSpaceOnUse" markerWidth="16" markerHeight="16" refX="13" refY="8" orient="auto"><path d="M1,1 L15,8 L1,15 z" fill="#3ddc97"/></marker>
+<marker id="s" markerUnits="userSpaceOnUse" markerWidth="16" markerHeight="16" refX="3" refY="8" orient="auto-start-reverse"><path d="M1,1 L15,8 L1,15 z" fill="#3ddc97"/></marker>
+</defs>
+<g stroke="#3ddc97" stroke-width="3.5" fill="none" stroke-linecap="round"><line x1="264" y1="300" x2="366" y2="300" marker-start="url(#s)" marker-end="url(#a)"/><line x1="594" y1="300" x2="726" y2="300" marker-start="url(#s)" marker-end="url(#a)"/><line x1="264" y1="610" x2="366" y2="610" marker-start="url(#s)" marker-end="url(#a)"/><line x1="594" y1="610" x2="726" y2="610" marker-start="url(#s)" marker-end="url(#a)"/><line x1="974" y1="300" x2="996" y2="300" marker-end="url(#a)"/><line x1="1244" y1="300" x2="1266" y2="300" marker-end="url(#a)"/><line x1="1120" y1="354" x2="1120" y2="396" marker-end="url(#a)"/><line x1="850" y1="546" x2="850" y2="504" marker-end="url(#a)"/><line x1="1534" y1="510" x2="1596" y2="510" marker-end="url(#a)"/><line x1="264" y1="957" x2="336" y2="957" marker-end="url(#a)"/><line x1="574" y1="957" x2="636" y2="957" marker-end="url(#a)"/><line x1="894" y1="957" x2="956" y2="957" marker-end="url(#a)"/><line x1="1194" y1="957" x2="1256" y2="957" marker-end="url(#a)"/><line x1="1534" y1="957" x2="1646" y2="957" marker-end="url(#a)" stroke-dasharray="8 7"/><line x1="1596" y1="244" x2="1596" y2="772" /><line x1="1596" y1="244" x2="1644" y2="244" marker-end="url(#a)"/><line x1="1596" y1="332" x2="1644" y2="332" marker-end="url(#a)"/><line x1="1596" y1="420" x2="1644" y2="420" marker-end="url(#a)"/><line x1="1596" y1="508" x2="1644" y2="508" marker-end="url(#a)"/><line x1="1596" y1="596" x2="1644" y2="596" marker-end="url(#a)"/><line x1="1596" y1="684" x2="1644" y2="684" marker-end="url(#a)"/><line x1="1596" y1="772" x2="1644" y2="772" marker-end="url(#a)"/></g></svg>
+
+<div class="lab" style="left:264px;top:268px;width:102px;text-align:center">WhatsApp Web</div>
+<div class="lab" style="left:594px;top:268px;width:104px;text-align:center">WebSocket</div>
+<div class="lab" style="left:264px;top:578px;width:102px;text-align:center">HTTPS</div>
+<div class="lab" style="left:594px;top:578px;width:104px;text-align:center">túnel</div>
+<div class="lab" style="left:1132px;top:362px">resposta</div>
+<div class="lab" style="left:862px;top:512px">painel</div>
+<div class="lab" style="left:1534px;top:482px;width:62px;text-align:center">HTTPS</div>
+<div class="lab" style="left:1534px;top:975px;width:112px;text-align:center">monitora</div>
+<div class="sect" style="left:40px;top:200px">QUEM USA</div>
+<div class="sect" style="left:370px;top:200px">INTERNET</div>
+<div class="sect" style="left:40px;top:862px">DESENVOLVIMENTO E DEPLOY</div>
+
+<div class="note">Chaves e senhas ficam só em arquivo de configuração na VM (nunca no código). O painel não tem porta aberta na internet: só é acessado pelo túnel da Cloudflare.</div>
+</body></html>
